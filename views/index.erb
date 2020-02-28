@@ -1,9 +1,49 @@
 <!doctype html>
 <html>
   <head>
-    <!-- Style and javascript links -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.3.3/dist/css/uikit.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.3.3/dist/js/uikit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.3.3/dist/js/uikit-icons.min.js"></script>
+
+    <style>
+      .uk-table-xsmall td { padding: 3px 12px }
+      a { color: #0d0d0d }
+      a:visited { color: #999 }
+      td:hover { background-color: #f6f7ee }
+    </style>
   </head>
   <body>
-    Hi
+    <div class="uk-container uk-container-small">
+      <p class="uk-placeholder uk-margin-top uk-text-center">HackiNews</p>
+
+      <table class="uk-table uk-table-xsmall">
+        <thead>
+          <tr>
+            <th>Comments</th>
+            <th>Points</th>
+            <th class="uk-table-expand"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @top_stories.each do |story| %>
+            <tr>
+              <%# require 'pry'; binding.pry %>
+              <td class="uk-text-right"><%= story[:descendants] %></td>
+              <td class="uk-text-right">
+                <a href="https://news.ycombinator.com/item?id=<%= story[:id] %>"><%= story[:score] %></a>
+              </td>
+              <td>
+                <% if story[:url] %>
+                  <a href="<%= story[:url] %>"><%= story[:title] %></a>
+                  <span class="uk-text-meta">(<%= URI.parse(story[:url]).host %>)</span>
+                <% else %>
+                  <a href="https://news.ycombinator.com/item?id=<%= story[:id] %>"><%= story[:title] %></a>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
   </body>
 </html>
