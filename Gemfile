@@ -2,7 +2,9 @@
 
 source 'https://rubygems.org'
 
+gem 'activerecord'
 gem 'lightly'
+gem 'pg'
 gem 'sinatra'
 
 group :development do

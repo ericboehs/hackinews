@@ -13,7 +13,7 @@ module HackerNewsApi
         .first(limit)
         .map { |top_story| story top_story }
         .compact
-        .sort_by { |story| story[:time] }
+        .sort_by { |story| story['time'] }
         .reverse
     end
 
@@ -52,7 +52,7 @@ module HackerNewsApi
       request = Net::HTTP::Get.new uri
       http = Net::HTTP.start uri.host, uri.port, use_ssl: true
       raw_response = Lightly.get(endpoint) { http.request request }
-      JSON.parse raw_response.body, symbolize_names: true
+      JSON.parse raw_response.body
     end
 
     private

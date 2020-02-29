@@ -1,49 +1,94 @@
 <!doctype html>
 <html>
   <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.3.3/dist/css/uikit.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/uikit@3.3.3/dist/js/uikit.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/uikit@3.3.3/dist/js/uikit-icons.min.js"></script>
 
     <style>
-      .uk-table-xsmall td { padding: 3px 12px }
+      .hn-table-xsmall td { padding: 3px 12px }
+      .hn-text-xsmall { font-size: 0.75em !important }
       a { color: #0d0d0d }
-      a:visited { color: #999 }
-      td:hover { background-color: #f6f7ee }
+      table a:visited { color: #999 }
     </style>
   </head>
   <body>
-    <div class="uk-container uk-container-small">
-      <p class="uk-placeholder uk-margin-top uk-text-center">HackiNews</p>
+    <div class="uk-container uk-container-small uk-margin-bottom">
+      <h1 class="uk-heading-divider uk-margin-top uk-text-center">
+        <a href="/">HackiNews</a>
+      </h1>
 
-      <table class="uk-table uk-table-xsmall">
-        <thead>
-          <tr>
-            <th>Comments</th>
-            <th>Points</th>
-            <th class="uk-table-expand"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <% @top_stories.each do |story| %>
+      <p class="uk-form-label uk-text-center uk-text-meta">Minimum Score</p>
+      <ul class="uk-subnav uk-subnav-pill uk-flex-center" uk-margin>
+        <% App::MIN_SCORES.each do |score| %>
+          <li<%= ' class="uk-active"' if @min_score == score %>>
+            <a href="?min_score=<%= score %>"><%= score %></a>
+          </li>
+        <% end %>
+      </ul>
+
+      <% if @stories.present? %>
+        <table class="uk-table hn-table-xsmall">
+          <thead>
             <tr>
-              <%# require 'pry'; binding.pry %>
-              <td class="uk-text-right"><%= story[:descendants] %></td>
-              <td class="uk-text-right">
-                <a href="https://news.ycombinator.com/item?id=<%= story[:id] %>"><%= story[:score] %></a>
-              </td>
-              <td>
-                <% if story[:url] %>
-                  <a href="<%= story[:url] %>"><%= story[:title] %></a>
-                  <span class="uk-text-meta">(<%= URI.parse(story[:url]).host %>)</span>
-                <% else %>
-                  <a href="https://news.ycombinator.com/item?id=<%= story[:id] %>"><%= story[:title] %></a>
-                <% end %>
-              </td>
+              <th class="uk-table-shrink hn-text-xsmall"><span class="uk-visible@s">Comments</span></th>
+              <th class="uk-table-shrink hn-text-xsmall"><span class="uk-visible@s">Points</span></th>
+              <th class="uk-table-expand"></th>
             </tr>
-          <% end %>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            <% @stories.each do |story| %>
+              <tr id="<%= story.data['id'] %>" date="<%= story.data['time'] %>">
+                <td class="uk-text-center" colspan=2>
+                  <div class="" uk-grid>
+                    <a href="<%= story.comments_url %>" class="uk-visible@s uk-text-right uk-display-inline-block uk-width-1-2">
+                      <%= story.data['descendants'] %>
+                    </a>
+                    <a href="<%= story.comments_url %>" class="uk-text-right uk-display-inline-block uk-width-1-2 uk-margin-right-small <%= 'uk-text-primary' if story.data['score'] > @next_min_score %>">
+                      <%= story.data['score'] %>
+                    </a>
+                  </div>
+                </td>
+                <td>
+                  <% if story.data['url'] %>
+                    <a href="<%= story.data['url'] %>" class="uk-display-block">
+                      <%= story.data['title'] %>
+                      <span class="uk-text-meta">(<%= URI.parse(story.data['url']).host %>)</span>
+                    </a>
+                  <% else %>
+                    <a href="https://news.ycombinator.com/item?id=<%= story.data['id'] %>"><%= story.data['title'] %></a>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      <% else %>
+        <p class="uk-placeholder uk-text-center">No results.</p>
+      <% end %>
     </div>
+
+    <template id="daterow">
+      <tr><td class="uk-heading-divider" style="padding: 10px 0 5px 5px" colspan=3></td></tr>
+    </template>
+
+    <!-- Insert date table rows (e.g. Fri, Feb 28) -->
+    <script>
+      var daterowTemplate = document.querySelector('#daterow')
+
+      Array.from(document.querySelectorAll('tr[date]')).forEach(function (el) {
+        var date = new Date(el.getAttribute('date') * 1000)
+        var prettyDate = date.toLocaleDateString(undefined, {
+          weekday: 'short', month: 'short', day: 'numeric'
+        })
+        var daterow = daterowTemplate.content.cloneNode(true)
+        daterow.querySelector('td').textContent = prettyDate
+        var alreadyInserted = Array.from(el.parentNode.children).some(e => daterow.textContent.includes(e.textContent))
+        var isToday = (new Date()).toDateString() === date.toDateString()
+        if (!alreadyInserted && !isToday) el.parentNode.insertBefore(daterow, el)
+      })
+    </script>
   </body>
 </html>
