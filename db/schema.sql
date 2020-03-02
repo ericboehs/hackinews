@@ -19,7 +19,9 @@ SET default_table_access_method = heap;
 
 CREATE TABLE public.items (
     id integer NOT NULL,
-    data jsonb NOT NULL
+    data jsonb NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
 );
 
 
