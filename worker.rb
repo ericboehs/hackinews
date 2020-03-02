@@ -14,7 +14,7 @@ class Worker
   end
 
   def run
-    Item.top_stories min_score: 0
+    Item.top_stories
   end
 end
 

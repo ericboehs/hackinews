@@ -17,7 +17,7 @@ class App < Sinatra::Base
   get '/' do
     @min_score = params['min_score'].to_i || 50
     @next_min_score = MIN_SCORES[(MIN_SCORES.index(@min_score) || 0) + 1] || Float::INFINITY
-    @stories = Item.top_stories min_score: @min_score
+    @stories = Item.min_score(@min_score).by_time.first 500
     erb :index
   end
 

@@ -2,11 +2,16 @@
 
 # HackerNews Item (Story, Comment, etc)
 class Item < ActiveRecord::Base
-  def self.top_stories(min_score: 50)
-    Item
-      .where(id: hn_client.top_story_ids.map { |id| prefetch id })
-      .where("(data->'score')::int > ?", min_score)
-      .order(Arel.sql("data->'time' desc"))
+  def self.top_stories
+    Item.where id: hn_client.top_story_ids.map { |id| prefetch id }
+  end
+
+  def self.min_score(score = 50)
+    where "(data->'score')::int > ?", score
+  end
+
+  def self.by_time
+    order(Arel.sql("data->'time' desc"))
   end
 
   def self.prefetch(id)
