@@ -11,10 +11,12 @@ class Item < ActiveRecord::Base
 
   def self.prefetch(id)
     item = Item.find_by id: id
+
     if item && item.updated_at > 10.minutes.ago
       id
     elsif item
       item.update data: hn_client.item(id), updated_at: Time.now.utc
+      item.id
     else
       Item.create(id: id, data: hn_client.item(id)).id
     end
