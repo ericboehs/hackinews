@@ -6,6 +6,7 @@ ruby '~> 2.6.5'
 
 gem 'activerecord'
 gem 'pg'
+gem 'puma'
 gem 'sinatra'
 
 group :development do
