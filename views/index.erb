@@ -10,8 +10,13 @@
     <style>
       .hn-table-xsmall td { padding: 3px 12px }
       .hn-text-xsmall { font-size: 0.75em !important }
-      a { color: #0d0d0d }
+      a { color: #0d0d0d; }
+      .story a { text-decoration: none; }
       table a:visited { color: #999 }
+
+      @media (prefers-color-scheme: dark) {
+        html { background-color: rgb(34, 34, 34) }
+      }
     </style>
   </head>
   <body>
@@ -51,7 +56,7 @@
                     </a>
                   </div>
                 </td>
-                <td>
+                <td class="story">
                   <% if story.data['url'] %>
                     <a href="<%= story.data['url'] %>" class="uk-display-block">
                       <%= story.data['title'] %>
@@ -89,6 +94,21 @@
         var isToday = (new Date()).toDateString() === date.toDateString()
         if (!alreadyInserted && !isToday) el.parentNode.insertBefore(daterow, el)
       })
+    </script>
+
+    <!-- Enable dark mode -->
+    <script>
+      function toggleDarkMode() {
+        if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+          document.body.classList.add('uk-light')
+        } else {
+          document.body.classList.remove('uk-light')
+        }
+      }
+
+      toggleDarkMode()
+
+      setInterval(toggleDarkMode, 500)
     </script>
 
     <% if ENV['GA_TRACKING_ID'] %>
