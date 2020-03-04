@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'bundler/setup'
 require 'active_record'
 require 'sinatra'
 require './lib/hacker_news_api/client'
