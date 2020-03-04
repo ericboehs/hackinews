@@ -8,5 +8,3 @@ class Worker
     Item.top_stories
   end
 end
-
-Worker.run
