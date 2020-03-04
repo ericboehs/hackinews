@@ -6,7 +6,6 @@ require 'bundler/setup'
 Bundler.require 'default', ENV['RACK_ENV']
 
 require 'active_record'
-require './lib/hacker_news_api/client'
 require './models/item'
 
 # The App
@@ -23,12 +22,6 @@ class App < Sinatra::Base
     @next_min_score = MIN_SCORES[(MIN_SCORES.index(@min_score) || 0) + 1] || Float::INFINITY
     @stories = Item.min_score(@min_score).by_time.first 500
     erb :index
-  end
-
-  private
-
-  def client
-    @client ||= HackerNewsApi::Client.new
   end
 end
 

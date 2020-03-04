@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../lib/hacker_news_api/client'
+
 # HackerNews Item (Story, Comment, etc)
 class Item < ActiveRecord::Base
   def self.top_stories
@@ -28,7 +30,7 @@ class Item < ActiveRecord::Base
   end
 
   def self.hn_client
-    @hn_client ||= HackerNewsApi::Client.new
+    HackerNewsApi::Client.new
   end
 
   def comments_url
