@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
+ENV['RACK_ENV'] ||= 'development'
+
 require 'bundler/setup'
+Bundler.require 'default', ENV['RACK_ENV']
+
 require 'active_record'
-require 'sinatra'
 require './lib/hacker_news_api/client'
 require './models/item'
 
