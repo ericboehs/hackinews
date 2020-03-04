@@ -18,6 +18,10 @@ class App < Sinatra::Base
     ActiveRecord::Base.establish_connection url
   end
 
+  def self.logger
+    @@logger ||= Logger.new STDOUT # rubocop:disable Style/ClassVars
+  end
+
   get '/' do
     @min_score = (params['min_score'] || 50).to_i
     @next_min_score =

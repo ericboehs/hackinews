@@ -5,17 +5,6 @@ require 'net/http'
 module HackerNewsApi
   # Interfaces with Hacker News API
   class Client
-    LIMIT = 30
-
-    def top_stories(limit = LIMIT)
-      top_story_ids
-        .first(limit)
-        .map { |top_story| story top_story }
-        .compact
-        .sort_by { |story| story['time'] }
-        .reverse
-    end
-
     def top_story_ids
       get "#{base_url}/topstories.json"
     end
@@ -45,16 +34,30 @@ module HackerNewsApi
     end
 
     def get(endpoint)
-      $stdout.puts "#{self.class}: Fetching #{endpoint}"
+      App.logger.info "#{self.class}: Fetching #{endpoint}"
 
-      uri = URI endpoint
-      request = Net::HTTP::Get.new uri
-      http = Net::HTTP.start uri.host, uri.port, use_ssl: true
-      raw_response = http.request request
-      JSON.parse raw_response.body
+      http, request = setup_get_request endpoint
+      response = http.request request
+      raise 'Non-200' unless (200..300).include? response.code.to_i
+
+      JSON.parse response.body
+    rescue StandardError => e
+      handle_http_exception e, response
     end
 
     private
+
+    def setup_get_request(endpoint)
+      uri = URI endpoint
+      request = Net::HTTP::Get.new uri
+      http = Net::HTTP.start uri.host, uri.port, use_ssl: true
+      [request, http]
+    end
+
+    def handle_http_exception(exception, response)
+      App.logger.error "#{self.class}: Failed get request: #{exception}; " \
+        "Response: #{response.code} #{response.body}"
+    end
 
     def base_url
       'https://hacker-news.firebaseio.com/v0'
