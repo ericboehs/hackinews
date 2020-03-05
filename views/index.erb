@@ -110,6 +110,27 @@
       setInterval(toggleDarkMode, 500)
     </script>
 
+    <!-- Keyboard Navigation -->
+    <script>
+      function relativelyFocusLink(offset) {
+        if (document.activeElement.classList.contains('comments')) {
+          var commentLinks = Array.from(document.querySelectorAll("a.comments"))
+          var currentCommentLink = commentLinks.indexOf(document.activeElement)
+          commentLinks[currentCommentLink + offset].focus()
+        } else {
+          var storyLinks = Array.from(document.querySelectorAll(".story a"))
+          var currentStoryLink = storyLinks.indexOf(document.activeElement)
+          storyLinks[currentStoryLink + offset].focus()
+        }
+      }
+
+      document.addEventListener('keydown', function (e) {
+        if (!['j', 'k'].includes(e.key)) return
+        if (e.key === 'j') relativelyFocusLink(1)
+        if (e.key === 'k') relativelyFocusLink(-1)
+      })
+    </script>
+
     <% if ENV['GA_TRACKING_ID'] %>
       <script async src="https://www.googletagmanager.com/gtag/js?id=<%= ENV['GA_TRACKING_ID'] %>"></script>
       <script>
