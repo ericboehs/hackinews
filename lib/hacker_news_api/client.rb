@@ -51,7 +51,7 @@ module HackerNewsApi
       uri = URI endpoint
       request = Net::HTTP::Get.new uri
       http = Net::HTTP.start uri.host, uri.port, use_ssl: true
-      [request, http]
+      [http, request]
     end
 
     def handle_http_exception(exception, response)

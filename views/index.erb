@@ -59,7 +59,7 @@
                   <% if story.data['url'] %>
                     <a href="<%= story.data['url'] %>" class="uk-display-block">
                       <%= story.data['title'] %>
-                      <span class="uk-text-meta">(<%= URI.parse(story.data['url']).host %>)</span>
+                      <span class="uk-text-meta">(<%= URI.parse(story.data['url'].delete('#')).host %>)</span>
                     </a>
                   <% else %>
                     <a href="https://news.ycombinator.com/item?id=<%= story.data['id'] %>"><%= story.data['title'] %></a>
