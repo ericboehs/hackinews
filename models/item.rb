@@ -47,7 +47,8 @@ class Item < ActiveRecord::Base
 
     data['kids']
       .map { |kid| Item.prefetch kid }
-      .map { |id| Item.find id }
+      .map { |id| Item.find_by id: id }
+      .compact
       .map(&:prefetch_children)
   end
 
