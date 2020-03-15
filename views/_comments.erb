@@ -2,7 +2,7 @@
   <ul class="uk-comment-list" uk-accordion='multiple: true; toggle: > .uk-accordion-title:not(.a-hover)'>
     <% comments.each do |comment| %>
       <li class="uk-open" id="<%= comment.data['id'] %>">
-        <div class="uk-accordion-title" href="#">
+        <div class="uk-accordion-title hn-cursor-pointer">
           <%= comment.data['by'] %>
           <% comment_time = Time.at(comment.data['time']).utc %>
           <a href="#<%= comment.data['id'] %>" class="uk-text-meta" title="<%= comment_time %>">
