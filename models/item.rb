@@ -30,8 +30,9 @@ class Item < ActiveRecord::Base
       item.prefetch_children
       item.id
     else
-      item = Item.create(id: id, data: hn_client.item(id)).id rescue nil
+      item = Item.create(id: id, data: hn_client.item(id)) rescue nil
       item&.prefetch_children
+      item&.id
     end
   end
 
