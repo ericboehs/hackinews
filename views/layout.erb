@@ -12,7 +12,28 @@
       .story a { text-decoration: none; }
       table a:visited { color: #999 }
 
+      article { overflow-wrap: break-word }
+      article p { margin-top: 20px }
+
+      .uk-comment-list .uk-comment~ul {
+        padding-left: 25px;
+        margin : 0
+      }
+
+      .uk-comment-list li {
+        border-left: 3px solid #DDD;
+        padding-left: 8px;
+        margin-top: 5px;
+      }
+
+      .uk-comment-list li:hover { border-left: 3px solid #0f6ecd }
+
+      .uk-comment-list .uk-comment~ul>:nth-child(n+2) { margin-top: 20px }
+
+      .uk-accordion-content { margin-top: 10px }
+
       @media (prefers-color-scheme: light) {
+        html { color: #000 }
         a { color: #0d0d0d; }
       }
 

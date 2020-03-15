@@ -1,12 +1,20 @@
 <% if comments.present? %>
-  <ul class="uk-comment-list" uk-accordion='multiple: true'>
+  <ul class="uk-comment-list" uk-accordion='multiple: true; toggle: > .uk-accordion-title:not(.a-hover)'>
     <% comments.each do |comment| %>
-      <li class="uk-open">
-        <a class="uk-accordion-title" href="#"><%= comment.data['by'] %></a>
+      <li class="uk-open" id="<%= comment.data['id'] %>">
+        <div class="uk-accordion-title" href="#">
+          <%= comment.data['by'] %>
+          <% comment_time = Time.at(comment.data['time']).utc %>
+          <a href="#<%= comment.data['id'] %>" class="uk-text-meta" title="<%= comment_time %>">
+            <time datetime="<%= comment.data['time'] %>" class="ago"></time>
+          </a>
+        </div>
+
         <div class="uk-accordion-content">
           <article class="uk-comment">
             <%= comment.data['text'] %>
           </article>
+
           <% if comment.comments.present? %>
             <%= erb :_comments, layout: false, locals: { comments: comment.comments } %>
           <% end %>

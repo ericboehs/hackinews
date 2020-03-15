@@ -15,3 +15,43 @@ by <%= @story.data['by'] %> |
 <% if @story.comments.blank? %>
   <p class="uk-placeholder uk-text-center">No comments.</p>
 <% end %>
+
+<!-- Set time ago on commets -->
+<script>
+  function timeSince(date) {
+    var seconds = Math.floor(((new Date().getTime()/1000) - date)), interval = Math.floor(seconds / 31536000)
+
+    if (interval > 1) return interval + " years"
+
+    interval = Math.floor(seconds / 2592000)
+    if (interval > 1) return interval + " months"
+
+    interval = Math.floor(seconds / 86400)
+    if (interval >= 1) return interval + " days"
+
+    interval = Math.floor(seconds / 3600)
+    if (interval >= 1) return interval + " hours"
+
+    interval = Math.floor(seconds / 60)
+    if (interval > 1) return interval + " minutes"
+
+    return Math.floor(seconds) + " seconds"
+  }
+
+  function setTimeAgos() {
+    Array.from(document.querySelectorAll('time.ago')).forEach((time) => {
+      time.textContent = timeSince(time.dateTime) + ' ago'
+    })
+  }
+
+  setTimeAgos()
+  setInterval(setTimeAgos, 10000)
+</script>
+
+<!-- Prevent click comment link from collapsing comment -->
+<script>
+  Array.from(document.querySelectorAll('.uk-accordion-title a')).forEach((el) => {
+    el.onmouseover = function() { el.parentNode.classList.add('a-hover') }
+    el.onmouseout = function() { el.parentNode.classList.remove('a-hover') }
+  })
+</script>
