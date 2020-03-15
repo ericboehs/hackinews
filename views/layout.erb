@@ -9,9 +9,12 @@
     <style>
       .hn-table-xsmall td { padding: 3px 12px }
       .hn-text-xsmall { font-size: 0.75em !important }
-      <%# a { color: #0d0d0d; } %>
       .story a { text-decoration: none; }
       table a:visited { color: #999 }
+
+      @media (prefers-color-scheme: light) {
+        a { color: #0d0d0d; }
+      }
 
       @media (prefers-color-scheme: dark) {
         html { background-color: rgb(34, 34, 34) }
