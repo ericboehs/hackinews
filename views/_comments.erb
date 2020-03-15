@@ -1,0 +1,17 @@
+<% if comments.present? %>
+  <ul class="uk-comment-list" uk-accordion='multiple: true'>
+    <% comments.each do |comment| %>
+      <li class="uk-open">
+        <a class="uk-accordion-title" href="#"><%= comment.data['by'] %></a>
+        <div class="uk-accordion-content">
+          <article class="uk-comment">
+            <%= comment.data['text'] %>
+          </article>
+          <% if comment.comments.present? %>
+            <%= erb :_comments, layout: false, locals: { comments: comment.comments } %>
+          <% end %>
+        </div>
+      </li>
+    <% end %>
+  </ul>
+<% end %>

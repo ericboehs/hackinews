@@ -16,6 +16,10 @@ class Item < ActiveRecord::Base
     order(Arel.sql("data->'time' desc"))
   end
 
+  def self.stories
+    where "(data->'type')::text like '%story%'"
+  end
+
   def self.prefetch(id)
     item = Item.find_by id: id
 
@@ -23,10 +27,27 @@ class Item < ActiveRecord::Base
       id
     elsif item
       item.update data: hn_client.item(id), updated_at: Time.now.utc
+      item.prefetch_children
       item.id
     else
-      Item.create(id: id, data: hn_client.item(id)).id
+      item = Item.create(id: id, data: hn_client.item(id)).id rescue nil
+      item&.prefetch_children
     end
+  end
+
+  def self.remove_old_comments
+    recent_story_ids = Item.stories.last(200).pluck :id
+    old_story_ids = Item.stories.where.not(id: recent_story_ids).pluck :id
+    Item.where("(data->'parent')::numeric IN (?)", old_story_ids).delete_all
+  end
+
+  def prefetch_children
+    return unless data['kids']
+
+    data['kids']
+      .map { |kid| Item.prefetch kid }
+      .map { |id| Item.find id }
+      .map(&:prefetch_children)
   end
 
   def self.hn_client
@@ -35,5 +56,9 @@ class Item < ActiveRecord::Base
 
   def comments_url
     "https://news.ycombinator.com/item?id=#{data['id']}"
+  end
+
+  def comments
+    data['kids']&.map { |kid| Item.find_by id: kid }&.compact
   end
 end

@@ -1,0 +1,17 @@
+<% if @story.data['url'] %>
+  <a href="<%= @story.data['url'] %>" class="uk-display-block">
+    <%= @story.data['title'] %>
+    <span class="uk-text-meta">(<%= URI.parse(@story.data['url'].delete('#').encode(Encoding.find('ASCII'), { replace: '' })).host %>)</span>
+  </a>
+<% else %>
+  <a href="https://news.ycombinator.com/item?id=<%= @story.data['id'] %>"><%= @story.data['title'] %></a>
+<% end %>
+<%= @story.data['score'] %> points | 
+by <%= @story.data['by'] %> | 
+<a href="<%= @story.comments_url %>"><%= @story.data['descendants'] %> Comments</a>
+
+<%= erb :_comments, layout: false, locals: { comments: @story.comments } %>
+
+<% if @story.comments.blank? %>
+  <p class="uk-placeholder uk-text-center">No comments.</p>
+<% end %>

@@ -29,6 +29,11 @@ class App < Sinatra::Base
     @stories = Item.min_score(@min_score).by_time.first 500
     erb :index
   end
+
+  get '/stories/:id' do
+    @story = Item.find params[:id]
+    erb :story
+  end
 end
 
 App.boot

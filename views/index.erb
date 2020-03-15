@@ -1,145 +1,90 @@
-<!doctype html>
-<html>
-  <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+<p class="uk-form-label uk-text-center uk-text-meta">Minimum Score</p>
+<ul class="uk-subnav uk-subnav-pill uk-flex-center" uk-margin>
+  <% App::MIN_SCORES.each do |score| %>
+    <li<%= ' class="uk-active"' if @min_score == score %>>
+      <a href="?min_score=<%= score %>"><%= score %></a>
+    </li>
+  <% end %>
+</ul>
 
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.3.3/dist/css/uikit.min.css" />
-    <script src="https://cdn.jsdelivr.net/npm/uikit@3.3.3/dist/js/uikit.min.js"></script>
-
-    <style>
-      .hn-table-xsmall td { padding: 3px 12px }
-      .hn-text-xsmall { font-size: 0.75em !important }
-      a { color: #0d0d0d; }
-      .story a { text-decoration: none; }
-      table a:visited { color: #999 }
-
-      @media (prefers-color-scheme: dark) {
-        html { background-color: rgb(34, 34, 34) }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="uk-container uk-container-small uk-margin-bottom">
-      <h1 class="uk-heading-divider uk-margin-top uk-text-center">
-        <a href="/">HackiNews</a>
-      </h1>
-
-      <p class="uk-form-label uk-text-center uk-text-meta">Minimum Score</p>
-      <ul class="uk-subnav uk-subnav-pill uk-flex-center" uk-margin>
-        <% App::MIN_SCORES.each do |score| %>
-          <li<%= ' class="uk-active"' if @min_score == score %>>
-            <a href="?min_score=<%= score %>"><%= score %></a>
-          </li>
-        <% end %>
-      </ul>
-
-      <% if @stories.present? %>
-        <table class="uk-table hn-table-xsmall">
-          <thead>
-            <tr>
-              <th class="uk-table-shrink hn-text-xsmall"><span class="uk-visible@s">Comments</span></th>
-              <th class="uk-table-shrink hn-text-xsmall"><span class="uk-visible@s">Points</span></th>
-              <th class="uk-table-expand"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <% @stories.each do |story| %>
-              <tr id="<%= story.data['id'] %>" date="<%= story.data['time'] %>">
-                <td class="uk-text-center" colspan=2>
-                  <div class="" uk-grid>
-                    <a href="<%= story.comments_url %>" class="uk-visible@s uk-text-right uk-display-inline-block uk-width-1-2">
-                      <%= story.data['descendants'] %>
-                    </a>
-                    <a href="<%= story.comments_url %>" class="uk-text-right uk-display-inline-block uk-width-1-2 uk-margin-right-small <%= 'uk-text-primary' if story.data['score'] > @next_min_score %>">
-                      <%= story.data['score'] %>
-                    </a>
-                  </div>
-                </td>
-                <td class="story">
-                  <% if story.data['url'] %>
-                    <a href="<%= story.data['url'] %>" class="uk-display-block">
-                      <%= story.data['title'] %>
-                      <span class="uk-text-meta">(<%= URI.parse(story.data['url'].delete('#').encode(Encoding.find('ASCII'), { replace: '' })).host %>)</span>
-                    </a>
-                  <% else %>
-                    <a href="https://news.ycombinator.com/item?id=<%= story.data['id'] %>"><%= story.data['title'] %></a>
-                  <% end %>
-                </td>
-              </tr>
+<% if @stories.present? %>
+  <table class="uk-table hn-table-xsmall">
+    <thead>
+      <tr>
+        <th class="uk-table-shrink hn-text-xsmall"><span class="uk-visible@s">Comments</span></th>
+        <th class="uk-table-shrink hn-text-xsmall"><span class="uk-visible@s">Points</span></th>
+        <th class="uk-table-expand"></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @stories.each do |story| %>
+        <tr id="<%= story.data['id'] %>" date="<%= story.data['time'] %>">
+          <td class="uk-text-center" colspan=2>
+            <div class="" uk-grid>
+              <a href="<%= "/stories/#{story.id}" || story.comments_url %>" class="uk-visible@s uk-text-right uk-display-inline-block uk-width-1-2">
+                <%= story.data['descendants'] %>
+              </a>
+              <a href="<%= "/stories/#{story.id}" || story.comments_url %>" class="uk-text-right uk-display-inline-block uk-width-1-2 uk-margin-right-small <%= 'uk-text-primary' if story.data['score'] > @next_min_score %>">
+                <%= story.data['score'] %>
+              </a>
+            </div>
+          </td>
+          <td class="story">
+            <% if story.data['url'] %>
+              <a href="<%= story.data['url'] %>" class="uk-display-block">
+                <%= story.data['title'] %>
+                <span class="uk-text-meta">(<%= URI.parse(story.data['url'].delete('#').encode(Encoding.find('ASCII'), { replace: '' })).host %>)</span>
+              </a>
+            <% else %>
+              <a href="https://news.ycombinator.com/item?id=<%= story.data['id'] %>"><%= story.data['title'] %></a>
             <% end %>
-          </tbody>
-        </table>
-      <% else %>
-        <p class="uk-placeholder uk-text-center">No results.</p>
+          </td>
+        </tr>
       <% end %>
-    </div>
+    </tbody>
+  </table>
+<% else %>
+  <p class="uk-placeholder uk-text-center">No results.</p>
+<% end %>
 
-    <template id="daterow">
-      <tr><td class="uk-heading-divider" style="padding: 10px 0 5px 5px" colspan=3></td></tr>
-    </template>
+<template id="daterow">
+  <tr><td class="uk-heading-divider" style="padding: 10px 0 5px 5px" colspan=3></td></tr>
+</template>
 
-    <!-- Insert date table rows (e.g. Fri, Feb 28) -->
-    <script>
-      var daterowTemplate = document.querySelector('#daterow')
+<!-- Insert date table rows (e.g. Fri, Feb 28) -->
+<script>
+  var daterowTemplate = document.querySelector('#daterow')
 
-      Array.from(document.querySelectorAll('tr[date]')).forEach(function (el) {
-        var date = new Date(el.getAttribute('date') * 1000)
-        var prettyDate = date.toLocaleDateString(undefined, {
-          weekday: 'short', month: 'short', day: 'numeric'
-        })
-        var daterow = daterowTemplate.content.cloneNode(true)
-        daterow.querySelector('td').textContent = prettyDate
-        var alreadyInserted = Array.from(el.parentNode.children).some(e => daterow.textContent.includes(e.textContent))
-        var isToday = (new Date()).toDateString() === date.toDateString()
-        if (!alreadyInserted && !isToday) el.parentNode.insertBefore(daterow, el)
-      })
-    </script>
+  Array.from(document.querySelectorAll('tr[date]')).forEach(function (el) {
+    var date = new Date(el.getAttribute('date') * 1000)
+    var prettyDate = date.toLocaleDateString(undefined, {
+      weekday: 'short', month: 'short', day: 'numeric'
+    })
+    var daterow = daterowTemplate.content.cloneNode(true)
+    daterow.querySelector('td').textContent = prettyDate
+    var alreadyInserted = Array.from(el.parentNode.children).some(e => daterow.textContent.includes(e.textContent))
+    var isToday = (new Date()).toDateString() === date.toDateString()
+    if (!alreadyInserted && !isToday) el.parentNode.insertBefore(daterow, el)
+  })
+</script>
 
-    <!-- Enable dark mode -->
-    <script>
-      function toggleDarkMode() {
-        if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-          document.body.classList.add('uk-light')
-        } else {
-          document.body.classList.remove('uk-light')
-        }
-      }
+<!-- Keyboard Navigation -->
+<script>
+  function relativelyFocusLink(offset) {
+    if (document.activeElement.classList.contains('comments')) {
+      var commentLinks = Array.from(document.querySelectorAll("a.comments"))
+      var currentCommentLink = commentLinks.indexOf(document.activeElement)
+      commentLinks[currentCommentLink + offset].focus()
+    } else {
+      var storyLinks = Array.from(document.querySelectorAll(".story a"))
+      var currentStoryLink = storyLinks.indexOf(document.activeElement)
+      storyLinks[currentStoryLink + offset].focus()
+    }
+  }
 
-      toggleDarkMode()
-
-      setInterval(toggleDarkMode, 500)
-    </script>
-
-    <!-- Keyboard Navigation -->
-    <script>
-      function relativelyFocusLink(offset) {
-        if (document.activeElement.classList.contains('comments')) {
-          var commentLinks = Array.from(document.querySelectorAll("a.comments"))
-          var currentCommentLink = commentLinks.indexOf(document.activeElement)
-          commentLinks[currentCommentLink + offset].focus()
-        } else {
-          var storyLinks = Array.from(document.querySelectorAll(".story a"))
-          var currentStoryLink = storyLinks.indexOf(document.activeElement)
-          storyLinks[currentStoryLink + offset].focus()
-        }
-      }
-
-      document.addEventListener('keydown', function (e) {
-        if (!['j', 'k'].includes(e.key)) return
-        if (e.key === 'j') relativelyFocusLink(1)
-        if (e.key === 'k') relativelyFocusLink(-1)
-      })
-    </script>
-
-    <% if ENV['GA_TRACKING_ID'] %>
-      <script async src="https://www.googletagmanager.com/gtag/js?id=<%= ENV['GA_TRACKING_ID'] %>"></script>
-      <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag () { dataLayer.push(arguments); }
-        gtag('js', new Date());
-
-        gtag('config', '<%= ENV['GA_TRACKING_ID'] %>');
-      </script>
-    <% end %>
-  </body>
-</html>
+  document.addEventListener('keydown', function (e) {
+    if (!['j', 'k'].includes(e.key)) return
+    if (e.key === 'j') relativelyFocusLink(1)
+    if (e.key === 'k') relativelyFocusLink(-1)
+  })
+</script>
