@@ -1,14 +1,23 @@
-<% if @story.data['url'] %>
-  <a href="<%= @story.data['url'] %>" class="uk-display-block">
-    <%= @story.data['title'] %>
-    <span class="uk-text-meta">(<%= URI.parse(@story.data['url'].delete('#').encode(Encoding.find('ASCII'), { replace: '' })).host %>)</span>
-  </a>
-<% else %>
-  <a href="https://news.ycombinator.com/item?id=<%= @story.data['id'] %>"><%= @story.data['title'] %></a>
-<% end %>
-<%= @story.data['score'] %> points | 
-by <%= @story.data['by'] %> | 
-<a href="<%= @story.comments_url %>"><%= @story.data['descendants'] %> Comments</a>
+<article class="uk-article">
+  <h3>
+    <% if @story.data['url'] %>
+      <a href="<%= @story.data['url'] %>" class="uk-display-block">
+        <%= @story.data['title'] %>
+        <span class="uk-text-meta">(<%= URI.parse(@story.data['url'].delete('#').encode(Encoding.find('ASCII'), { replace: '' })).host %>)</span>
+      </a>
+    <% else %>
+      <a href="https://news.ycombinator.com/item?id=<%= @story.data['id'] %>"><%= @story.data['title'] %></a>
+    <% end %>
+  </h3>
+  <p class="uk-article-meta">
+    <%= @story.data['score'] %> points | 
+    by <%= @story.data['by'] %> | 
+    <a href="<%= @story.comments_url %>"><%= @story.data['descendants'] %> Comments</a>
+  </p>
+  <p>
+    <%= @story.data['text'] %>
+  </p>
+</article>
 
 <%= erb :_comments, layout: false, locals: { comments: @story.comments } %>
 
