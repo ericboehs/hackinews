@@ -6,6 +6,6 @@ require './app'
 class Worker
   def self.run
     Item.top_stories
-    # Item.remove_old_comments # Let's wait to remove this until Heroku complains
+    Item.remove_old_comments
   end
 end
