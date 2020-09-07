@@ -64,3 +64,32 @@
     el.onmouseout = function() { el.parentNode.classList.remove('a-hover') }
   })
 </script>
+
+<!-- Keyboard Navigation -->
+<script>
+  function relativelyFocusLink(offset) {
+    var commentLinks = Array.from(document.querySelectorAll("h1 > a, h3 > a, .uk-article-meta > a, .uk-container > .uk-comment-list > li > div > a.comment"))
+    var currentCommentLink = commentLinks.indexOf(document.activeElement)
+    commentLinks[currentCommentLink + offset].focus()
+  }
+
+  function focusPreviousLink() {
+      var links = Array.from(document.querySelectorAll("a"))
+      var currentLink = links.indexOf(document.activeElement)
+      links[currentLink - 1].focus()
+  }
+
+  function focusNextLink() {
+      var links = Array.from(document.querySelectorAll("a"))
+      var currentLink = links.indexOf(document.activeElement)
+      links[currentLink + 1].focus()
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (!['h', 'j', 'k', 'l'].includes(e.key)) return
+    if (e.key === 'h') focusPreviousLink()
+    if (e.key === 'j') relativelyFocusLink(1)
+    if (e.key === 'k') relativelyFocusLink(-1)
+    if (e.key === 'l') focusNextLink()
+  })
+</script>

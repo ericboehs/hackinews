@@ -5,7 +5,7 @@
         <div class="uk-accordion-title hn-cursor-pointer">
           <%= comment.data['by'] %>
           <% comment_time = Time.at(comment.data['time']).utc %>
-          <a href="#<%= comment.data['id'] %>" class="uk-text-meta" title="<%= comment_time %>">
+          <a href="#<%= comment.data['id'] %>" class="uk-text-meta comment" title="<%= comment_time %>">
             <time datetime="<%= comment.data['time'] %>" class="ago"></time>
           </a>
         </div>

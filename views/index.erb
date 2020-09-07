@@ -21,10 +21,10 @@
         <tr id="<%= story.data['id'] %>" date="<%= story.data['time'] %>">
           <td class="uk-text-center" colspan=2>
             <div class="" uk-grid>
-              <a href="<%= "/stories/#{story.id}" || story.comments_url %>" class="uk-visible@s uk-text-right uk-display-inline-block uk-width-1-2">
+              <a href="<%= "/stories/#{story.id}" || story.comments_url %>" class="comments uk-visible@s uk-text-right uk-display-inline-block uk-width-1-2">
                 <%= story.data['descendants'] %>
               </a>
-              <a href="<%= "/stories/#{story.id}" || story.comments_url %>" class="uk-text-right uk-display-inline-block uk-width-1-2 uk-margin-right-small <%= 'uk-text-primary' if story.data['score'] > @next_min_score %>">
+              <a href="<%= "/stories/#{story.id}" || story.comments_url %>" class="points uk-text-right uk-display-inline-block uk-width-1-2 uk-margin-right-small <%= 'uk-text-primary' if story.data['score'] > @next_min_score %>">
                 <%= story.data['score'] %>
               </a>
             </div>
@@ -75,6 +75,10 @@
       var commentLinks = Array.from(document.querySelectorAll("a.comments"))
       var currentCommentLink = commentLinks.indexOf(document.activeElement)
       commentLinks[currentCommentLink + offset].focus()
+    } else if (document.activeElement.classList.contains('points')) {
+      var pointsLinks = Array.from(document.querySelectorAll("a.points"))
+      var currentPointLink = pointsLinks.indexOf(document.activeElement)
+      pointsLinks[currentPointLink + offset].focus()
     } else {
       var storyLinks = Array.from(document.querySelectorAll(".story a"))
       var currentStoryLink = storyLinks.indexOf(document.activeElement)
@@ -82,9 +86,23 @@
     }
   }
 
+  function focusPreviousLink() {
+      var links = Array.from(document.querySelectorAll("a"))
+      var currentLink = links.indexOf(document.activeElement)
+      links[currentLink - 1].focus()
+  }
+
+  function focusNextLink() {
+      var links = Array.from(document.querySelectorAll("a"))
+      var currentLink = links.indexOf(document.activeElement)
+      links[currentLink + 1].focus()
+  }
+
   document.addEventListener('keydown', function (e) {
-    if (!['j', 'k'].includes(e.key)) return
+    if (!['h', 'j', 'k', 'l'].includes(e.key)) return
+    if (e.key === 'h') focusPreviousLink()
     if (e.key === 'j') relativelyFocusLink(1)
     if (e.key === 'k') relativelyFocusLink(-1)
+    if (e.key === 'l') focusNextLink()
   })
 </script>
