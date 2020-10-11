@@ -52,6 +52,19 @@ class Item < ActiveRecord::Base
       .map(&:prefetch_children)
   end
 
+  def truncated_url
+    return unless data['url']
+
+    uri = URI.parse data['url'].delete('#%').encode(Encoding.find('ASCII'), { replace: '' })
+
+    uri.host.tap do |host|
+      return host unless host == 'github.com'
+
+      username = uri.path[%r{/[^/]*}]
+      host << username
+    end
+  end
+
   def self.hn_client
     HackerNewsApi::Client.new
   end
