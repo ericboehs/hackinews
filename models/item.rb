@@ -4,7 +4,7 @@ require_relative '../lib/hacker_news_api/client'
 
 # HackerNews Item (Story, Comment, etc)
 class Item < ActiveRecord::Base
-  EXTENDED_TRUNCATION_DOMAINS = %w[github.com twitter.com]
+  EXTENDED_TRUNCATION_DOMAINS = %w[github.com twitter.com medium.com].freeze
 
   def self.top_stories
     Item.where id: hn_client.top_story_ids.map { |id| prefetch id }
