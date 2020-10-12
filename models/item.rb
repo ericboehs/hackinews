@@ -4,6 +4,8 @@ require_relative '../lib/hacker_news_api/client'
 
 # HackerNews Item (Story, Comment, etc)
 class Item < ActiveRecord::Base
+  EXTENDED_TRUNCATION_DOMAINS = %w[github.com twitter.com]
+
   def self.top_stories
     Item.where id: hn_client.top_story_ids.map { |id| prefetch id }
   end
@@ -58,7 +60,7 @@ class Item < ActiveRecord::Base
     uri = URI.parse data['url'].delete('#%').encode(Encoding.find('ASCII'), { replace: '' })
 
     uri.host.tap do |host|
-      return host unless host == 'github.com'
+      return host unless EXTENDED_TRUNCATION_DOMAINS.include? host
 
       username = uri.path[%r{/[^/]*}]
       host << username
