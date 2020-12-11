@@ -45,6 +45,4 @@ class Dotenv
   end
 end
 
-if ENV['RACK_ENV'] == 'development' || ENV['RACK_ENV'] == 'test'
-  Dotenv.new.load %w[.env.local .env]
-end
+Dotenv.new.load %w[.env.local .env]
