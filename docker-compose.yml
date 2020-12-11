@@ -1,0 +1,92 @@
+# Use the file format compatible with Docker Compose 3.8
+version: "3.8"
+
+# Each thing that Docker Compose runs is referred to as
+# a "service". In our case, our Ruby application is one
+# service ("web") and our PostgreSQL database instance
+# is another service ("database").
+services:
+  database:
+    # Use the postgres 13.1 base image for this container.
+    image: postgres:13.1
+
+    volumes:
+      # We need to tell Docker where on the PostgreSQL
+      # container we want to keep the PostgreSQL data.
+      # In this case we're telling it to use a directory
+      # called /var/lib/postgresql/data, although it
+      # conceivably could have been something else.
+      #
+      # We're associating this directory with something
+      # called a volume. (You can see all your Docker
+      # volumes by running +docker volume ls+.) The name
+      # of our volume is db_data.
+      - db_data:/var/lib/postgresql/data
+
+      # This copies our init.sql into our container, to
+      # a special file called
+      # /docker-entrypoint-initdb.d/init.sql. Anything
+      # at this location will get executed one per
+      # container, i.e. it will get executed the first
+      # time the container is created but not again.
+      #
+      # The init.sql file is a one-line that creates a
+      # user called (arbitrarily) hackinews.
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+
+  web:
+    # The root directory from which we're building.
+    build: .
+
+    # This makes it so any code changes inside the project
+    # directory get synced with Docker. Without this line,
+    # we'd have to restart the container every time we
+    # changed a file.
+    volumes:
+      - .:/code:cached
+
+    # The command to be run when we run "docker-compose up".
+    command: bash -c "bundle exec puma -t 5:5 -p ${PORT:-3000} -e ${RACK_ENV:-development}"
+
+    # Expose port 3000.
+    ports:
+      - "3000:3000"
+
+    # Specify that this container depends on the other
+    # container which we've called "database".
+    depends_on:
+      - database
+
+    # Specify the values of the environment variables
+    # used in this container.
+    environment:
+      RACK_ENV: development
+      DATABASE_NAME: hackinews
+      DATABASE_USER: hackinews
+      DATABASE_PASSWORD: 
+      DATABASE_HOST: database
+
+  worker:
+    build: .
+
+    volumes:
+      - .:/code:cached
+
+    command: bash -c "bundle exec ruby -r ./worker.rb -e \"loop { Worker.run }\""
+
+    depends_on:
+      - database
+
+    environment:
+      RACK_ENV: development
+      DATABASE_NAME: hackinews
+      DATABASE_USER: hackinews
+      DATABASE_PASSWORD: 
+      DATABASE_HOST: database
+
+# Declare the volumes that our application uses.
+volumes:
+  db_data:

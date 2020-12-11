@@ -57,7 +57,7 @@ class Item < ActiveRecord::Base
   def truncated_url
     return unless data['url']
 
-    uri = URI.parse data['url'].delete('#%').encode(Encoding.find('ASCII'), { replace: '' })
+    uri = URI.parse data['url'].delete('#%').encode(Encoding.find('ASCII'), **{ replace: '' })
 
     uri.host.tap do |host|
       return host unless EXTENDED_TRUNCATION_DOMAINS.include? host
