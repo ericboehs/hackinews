@@ -64,10 +64,7 @@ services:
     # used in this container.
     environment:
       RACK_ENV: development
-      DATABASE_NAME: hackinews
-      DATABASE_USER: hackinews
-      DATABASE_PASSWORD: 
-      DATABASE_HOST: database
+      DATABASE_URL: postgres://hackinews@database/hackinews
 
   worker:
     build: .
@@ -82,10 +79,7 @@ services:
 
     environment:
       RACK_ENV: development
-      DATABASE_NAME: hackinews
-      DATABASE_USER: hackinews
-      DATABASE_PASSWORD: 
-      DATABASE_HOST: database
+      DATABASE_URL: postgres://hackinews@database/hackinews
 
 # Declare the volumes that our application uses.
 volumes:
