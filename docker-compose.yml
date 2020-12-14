@@ -10,6 +10,9 @@ services:
     # Use the postgres 13.1 base image for this container.
     image: postgres:13.1
 
+    networks:
+      - rev_proxy
+
     volumes:
       # We need to tell Docker where on the PostgreSQL
       # container we want to keep the PostgreSQL data.
@@ -41,6 +44,9 @@ services:
     # The root directory from which we're building.
     build: .
 
+    networks:
+      - rev_proxy
+
     # This makes it so any code changes inside the project
     # directory get synced with Docker. Without this line,
     # we'd have to restart the container every time we
@@ -69,6 +75,9 @@ services:
   worker:
     build: .
 
+    networks:
+      - rev_proxy
+
     volumes:
       - .:/code:cached
 
@@ -84,3 +93,7 @@ services:
 # Declare the volumes that our application uses.
 volumes:
   db_data:
+
+networks:
+  rev_proxy:
+    name: home_rev_proxy_default
