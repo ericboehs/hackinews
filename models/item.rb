@@ -22,6 +22,10 @@ class Item < ActiveRecord::Base
     where "(data->'type')::text like '%story%'"
   end
 
+  def self.title_matches(search)
+    Item.where "(data->'title')::text ilike ?", "%#{search}%"
+  end
+
   def self.prefetch(id)
     item = Item.find_by id: id
 
