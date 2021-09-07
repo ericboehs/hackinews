@@ -37,6 +37,10 @@ services:
       # user called (arbitrarily) hackinews.
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
 
+    deploy:
+      restart_policy:
+        condition: on-failure
+
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
 
@@ -66,6 +70,10 @@ services:
     depends_on:
       - database
 
+    deploy:
+      restart_policy:
+        condition: on-failure
+
     # Specify the values of the environment variables
     # used in this container.
     environment:
@@ -85,6 +93,10 @@ services:
 
     depends_on:
       - database
+
+    deploy:
+      restart_policy:
+        condition: on-failure
 
     environment:
       RACK_ENV: development
