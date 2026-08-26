@@ -1,10 +1,14 @@
 # frozen_string_literal: true
 
+require 'json'
 require 'net/http'
+require 'uri'
 
 module HackerNewsApi
   # Interfaces with Hacker News API
   class Client
+    DEFAULT_COMMENT_LIMIT = 30
+
     def top_story_ids
       get "#{base_url}/topstories.json"
     end
@@ -17,8 +21,8 @@ module HackerNewsApi
       get "#{base_url}/newstories.json"
     end
 
-    def comments(item_json, limit = LIMIT)
-      item_json['kids'].first(limit).map { |kid| item kid }
+    def comments(item_json, limit = DEFAULT_COMMENT_LIMIT)
+      Array(item_json['kids']).first(limit).map { |kid| item kid }
     end
 
     def comment(id)
@@ -34,29 +38,29 @@ module HackerNewsApi
     end
 
     def get(endpoint)
-      App.logger.info "#{self.class}: Fetching #{endpoint}"
+      logger.info "#{self.class}: Fetching #{endpoint}"
 
-      http, request = setup_get_request endpoint
-      response = http.request request
-      raise 'Non-200' unless (200..300).include? response.code.to_i
+      uri = URI endpoint
+      response = Net::HTTP.start(
+        uri.host, uri.port,
+        use_ssl: true, open_timeout: 5, read_timeout: 10
+      ) do |http|
+        http.request Net::HTTP::Get.new(uri)
+      end
+
+      raise "Non-200: #{response.code}" unless (200..299).cover? response.code.to_i
 
       JSON.parse response.body
     rescue StandardError => e
-      handle_http_exception e, response
+      logger.error "#{self.class}: Failed get request: #{e}; " \
+                   "Response: #{response&.code} #{response&.body}"
+      nil
     end
 
     private
 
-    def setup_get_request(endpoint)
-      uri = URI endpoint
-      request = Net::HTTP::Get.new uri
-      http = Net::HTTP.start uri.host, uri.port, use_ssl: true
-      [http, request]
-    end
-
-    def handle_http_exception(exception, response)
-      App.logger.error "#{self.class}: Failed get request: #{exception}; " \
-        "Response: #{response.code} #{response.body}"
+    def logger
+      App.logger
     end
 
     def base_url

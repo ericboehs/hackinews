@@ -1,6 +1,12 @@
+\restrict dbmate
+
+-- Dumped from database version 16.15 (Postgres.app)
+-- Dumped by pg_dump version 18.6 (Postgres.app)
+
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -30,7 +36,7 @@ CREATE TABLE public.items (
 --
 
 CREATE TABLE public.schema_migrations (
-    version character varying(255) NOT NULL
+    version character varying NOT NULL
 );
 
 
@@ -53,6 +59,8 @@ ALTER TABLE ONLY public.schema_migrations
 --
 -- PostgreSQL database dump complete
 --
+
+\unrestrict dbmate
 
 
 --

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+echo "==> Installing gems"
+bundle install
+
+if [ ! -f .env.local ]; then
+  echo "==> Creating .env.local from .env.example"
+  cp .env.example .env.local
+fi
+
+echo "==> Ensuring databases exist"
+createdb hackinews_development 2>/dev/null || true
+createdb hackinews_test 2>/dev/null || true
+
+echo "==> Running migrations"
+DATABASE_URL="${DATABASE_URL:-postgres:///hackinews_development}" dbmate up
+
+echo
+echo "Setup complete. Start the app with: bin/dev"

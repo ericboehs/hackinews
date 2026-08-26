@@ -19,15 +19,17 @@ module HackerNewsApi
 
     def test_it_gets_top_story_ids
       assert top_story_ids.count > 100
-      assert top_story_ids.first.is_a? Integer
+      assert_kind_of Integer, top_story_ids.first
     end
 
     def test_it_gets_a_story
-      story[:score].is_a? Integer
+      assert_kind_of Integer, story['score']
+      assert story['title']
     end
 
-    def test_it_gets_top_stories
-      hacker_news_client.top_stories
+    def test_it_gets_an_item
+      item = hacker_news_client.item top_story_ids.first
+      assert_equal top_story_ids.first, item['id']
     end
   end
 end

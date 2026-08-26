@@ -2,10 +2,13 @@
 
 ENV['RACK_ENV'] ||= 'development'
 
-require './lib/dotenv'
 require 'bundler/setup'
-Bundler.require 'default', ENV['RACK_ENV']
+Bundler.require 'default', ENV.fetch('RACK_ENV')
 
+require 'dotenv'
+Dotenv.load '.env.local', '.env'
+
+require 'logger'
 require 'active_record'
 require './models/item'
 
@@ -13,13 +16,19 @@ require './models/item'
 class App < Sinatra::Base
   MIN_SCORES = [0, 50, 100, 200, 300, 400, 500, 750, 1000].freeze
 
+  configure :development do
+    set :host_authorization, permitted_hosts: []
+  end
+
   def self.boot
-    url = ENV['DATABASE_URL']
+    url = ENV.fetch('DATABASE_URL') do
+      abort 'DATABASE_URL is required. Copy .env.example to .env.local'
+    end
     ActiveRecord::Base.establish_connection url
   end
 
   def self.logger
-    @@logger ||= Logger.new STDOUT # rubocop:disable Style/ClassVars
+    @logger ||= Logger.new $stdout
   end
 
   before do

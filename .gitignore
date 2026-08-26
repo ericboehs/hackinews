@@ -1,1 +1,8 @@
 .bundle
+.env.local
+.overmind.sock
+.idea
+.vscode
+*.swp
+/tmp
+/log

@@ -1,0 +1,39 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      RACK_ENV: test
+      DATABASE_URL: postgres://postgres@localhost/hackinews_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+          bundler-cache: true
+      - name: Create database
+        run: createdb -h localhost -U postgres hackinews_test
+      - name: Migrate
+        run: |
+          curl -fsSL -o /tmp/dbmate https://github.com/amacneil/dbmate/releases/latest/download/dbmate-linux-amd64
+          chmod +x /tmp/dbmate
+          /tmp/dbmate up
+      - name: Test
+        run: bundle exec rake test

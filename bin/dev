@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+if command -v overmind >/dev/null 2>&1; then
+  exec overmind start -f Procfile.dev
+elif command -v foreman >/dev/null 2>&1; then
+  exec foreman start -f Procfile.dev
+else
+  echo "Install overmind or foreman to run web + worker together."
+  echo "Or run separately:"
+  echo "  bundle exec puma -p 3000"
+  echo "  bundle exec ruby worker.rb"
+  exit 1
+fi

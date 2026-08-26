@@ -2,11 +2,14 @@
 
 source 'https://rubygems.org'
 
-ruby '~> 2.7.2'
+ruby '~> 4.0'
 
 gem 'activerecord'
+gem 'dotenv'
 gem 'pg'
 gem 'puma'
+gem 'rackup'
+gem 'rake'
 gem 'sinatra'
 
 group :development do
@@ -19,4 +22,5 @@ end
 
 group :test do
   gem 'minitest'
+  gem 'rack-test'
 end
