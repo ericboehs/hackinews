@@ -8,7 +8,7 @@ class ItemTest < Minitest::Test
     client = FakeHnClient.new
     Item.hn_client = client
 
-    assert_equal 1, Item.prefetch(1)
+    assert_equal [1, :fresh], Item.prefetch(1)
     assert_empty client.calls
   end
 
@@ -16,14 +16,14 @@ class ItemTest < Minitest::Test
     item = create_item id: 1, title: 'Old', updated_at: 1.hour.ago
     Item.hn_client = FakeHnClient.new(1 => { 'id' => 1, 'title' => 'New', 'type' => 'story' })
 
-    assert_equal 1, Item.prefetch(1)
+    assert_equal [1, :refreshed], Item.prefetch(1)
     assert_equal 'New', item.reload.data['title']
   end
 
   def test_prefetch_creates_missing_item
     Item.hn_client = FakeHnClient.new(9 => { 'id' => 9, 'title' => 'Fresh', 'type' => 'story' })
 
-    assert_equal 9, Item.prefetch(9)
+    assert_equal [9, :refreshed], Item.prefetch(9)
     created = Item.find(9)
     assert_equal 'Fresh', created.data['title']
   end
@@ -32,14 +32,14 @@ class ItemTest < Minitest::Test
     item = create_item id: 1, title: 'Cached', updated_at: 1.hour.ago
     Item.hn_client = FakeHnClient.new(1 => nil)
 
-    assert_equal 1, Item.prefetch(1)
+    assert_equal [1, :stale], Item.prefetch(1)
     assert_equal 'Cached', item.reload.data['title']
   end
 
   def test_failed_payload_without_cache_returns_nil
     Item.hn_client = FakeHnClient.new(1 => nil)
 
-    assert_nil Item.prefetch(1)
+    assert_equal [nil, :missing], Item.prefetch(1)
     assert_equal 0, Item.count
   end
 
@@ -119,6 +119,23 @@ class ItemTest < Minitest::Test
   def test_top_stories_returns_nil_when_ids_unavailable
     Item.hn_client = FakeHnClient.new(top_story_ids: nil)
     assert_nil Item.top_stories
+  end
+
+  def test_top_stories_raises_when_only_stale_cache
+    create_item id: 1, updated_at: 1.hour.ago
+    Item.hn_client = FakeHnClient.new(top_story_ids: [1], 1 => nil)
+
+    error = assert_raises(Item::RefreshFailed) { Item.top_stories }
+    assert_equal 'only stale cache served', error.message
+    assert Item.exists?(1)
+  end
+
+  def test_top_stories_succeeds_when_all_fresh
+    create_item id: 1, updated_at: 1.minute.ago
+    Item.hn_client = FakeHnClient.new(top_story_ids: [1])
+
+    assert_equal [1], Item.top_stories.pluck(:id)
+    refute_includes Item.hn_client.calls, 1
   end
 
   def test_comments_empty_when_no_kids

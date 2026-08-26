@@ -4,6 +4,14 @@ require_relative 'test_helper'
 require_relative '../worker'
 
 class WorkerTest < Minitest::Test
+  def test_run_raises_when_only_stale_cache
+    create_item id: 1, updated_at: 1.hour.ago
+    Item.hn_client = FakeHnClient.new(top_story_ids: [1], 1 => nil)
+
+    assert_raises(Item::RefreshFailed) { Worker.run }
+    assert Item.exists?(1)
+  end
+
   def test_run_raises_when_top_story_ids_unavailable
     client = FakeHnClient.new(top_story_ids: nil)
     Item.hn_client = client

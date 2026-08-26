@@ -18,6 +18,10 @@ if [ -z "${DATABASE_URL:-}" ] && [ -f .env.local ]; then
   DATABASE_URL="${DATABASE_URL#\"}"
   DATABASE_URL="${DATABASE_URL%\'}"
   DATABASE_URL="${DATABASE_URL#\'}"
+  if [ -z "$DATABASE_URL" ]; then
+    echo "ERROR: .env.local has no DATABASE_URL" >&2
+    exit 1
+  fi
 fi
 
 # Keep host/user/port/query from DATABASE_URL; swap only the database name.

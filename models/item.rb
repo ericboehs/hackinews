@@ -5,6 +5,8 @@ require_relative '../lib/hacker_news_api/client'
 
 # HackerNews Item (Story, Comment, etc)
 class Item < ActiveRecord::Base
+  class RefreshFailed < StandardError; end
+
   EXTENDED_TRUNCATION_DOMAINS = %w[github.com twitter.com x.com medium.com].freeze
 
   def self.top_stories
@@ -14,17 +16,24 @@ class Item < ActiveRecord::Base
       return nil
     end
 
-    persisted_ids = ids.filter_map { |id| prefetch id }
-    failed = ids.size - persisted_ids.size
+    results = ids.map { |id| prefetch id }
+    served_ids = results.filter_map { |id, _status| id }
+    stale = results.count { |_, status| status == :stale }
+    refreshed = results.count { |_, status| status == :refreshed }
+    missing = results.count { |_, status| status == :missing }
+
     if ids.empty?
       App.logger.warn 'Top stories list was empty'
-    elsif persisted_ids.empty?
+    elsif served_ids.empty?
       App.logger.error "Prefetch failed for all #{ids.size} top stories"
-    elsif failed.positive?
-      App.logger.warn "Prefetch failed for #{failed} of #{ids.size} top stories"
+    elsif stale.positive? && refreshed.zero?
+      App.logger.error "Prefetch served only stale cache (#{stale} stale, #{missing} missing)"
+      raise RefreshFailed, 'only stale cache served'
+    elsif stale.positive? || missing.positive?
+      App.logger.warn "Prefetch: #{refreshed} refreshed, #{stale} stale, #{missing} missing"
     end
 
-    Item.where id: persisted_ids
+    Item.where id: served_ids
   end
 
   def self.min_score(score = 50)
@@ -48,7 +57,7 @@ class Item < ActiveRecord::Base
 
     if item && item.updated_at > 10.minutes.ago
       item.prefetch_children
-      return id
+      return [id, :fresh]
     end
 
     payload = hn_client.item id
@@ -56,18 +65,18 @@ class Item < ActiveRecord::Base
       if item
         App.logger.warn "Using stale cache for item #{id}; fetch failed"
         item.prefetch_children
-        return id
+        return [id, :stale]
       end
-      return nil
+      return [nil, :missing]
     end
 
     if item
-      item.update data: payload, updated_at: Time.now.utc
+      item.update! data: payload, updated_at: Time.now.utc
     else
       item = Item.create!(id: id, data: payload)
     end
     item.prefetch_children
-    item.id
+    [item.id, :refreshed]
   end
 
   def self.remove_old_comments
