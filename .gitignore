@@ -1,4 +1,5 @@
 .bundle
+.env
 .env.local
 .overmind.sock
 .idea
