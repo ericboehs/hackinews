@@ -14,7 +14,17 @@ class Item < ActiveRecord::Base
       return nil
     end
 
-    Item.where id: ids.filter_map { |id| prefetch id }
+    persisted_ids = ids.filter_map { |id| prefetch id }
+    failed = ids.size - persisted_ids.size
+    if ids.empty?
+      App.logger.warn 'Top stories list was empty'
+    elsif persisted_ids.empty?
+      App.logger.error "Prefetch failed for all #{ids.size} top stories"
+    elsif failed.positive?
+      App.logger.warn "Prefetch failed for #{failed} of #{ids.size} top stories"
+    end
+
+    Item.where id: persisted_ids
   end
 
   def self.min_score(score = 50)
@@ -35,12 +45,17 @@ class Item < ActiveRecord::Base
 
   def self.prefetch(id)
     item = Item.find_by id: id
-    return id if item && item.updated_at > 10.minutes.ago
+
+    if item && item.updated_at > 10.minutes.ago
+      item.prefetch_children
+      return id
+    end
 
     payload = hn_client.item id
     unless payload
       if item
         App.logger.warn "Using stale cache for item #{id}; fetch failed"
+        item.prefetch_children
         return id
       end
       return nil
@@ -107,8 +122,18 @@ class Item < ActiveRecord::Base
   def comments
     if data.nil?
       App.logger.error "Item #{id} has nil data"
-      return []
+      return nil
     end
-    data['kids']&.map { |kid| Item.find_by id: kid }&.compact || []
+
+    kids = data['kids']
+    return [] if kids.blank?
+
+    loaded = kids.map { |kid| Item.find_by id: kid }
+    if loaded.all?(&:nil?)
+      App.logger.warn "Item #{id} comments not in cache"
+      return nil
+    end
+
+    loaded.compact
   end
 end

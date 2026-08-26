@@ -1,12 +1,17 @@
 # frozen_string_literal: true
 
 ENV['RACK_ENV'] = 'test'
+ENV['DATABASE_URL'] ||= 'postgres:///hackinews_test'
+
 require 'bundler/setup'
 require 'minitest/autorun'
 require 'minitest/pride'
 require 'minitest/mock'
 
 require './app'
+
+db = ActiveRecord::Base.connection_db_config.database.to_s
+abort "Refusing to run tests against #{db}" unless db.end_with?('_test')
 
 module ItemCleanup
   def before_setup
@@ -46,6 +51,7 @@ class FakeHnClient
   end
 
   def top_story_ids
+    @calls << :top_story_ids
     @payloads[:top_story_ids]
   end
 end

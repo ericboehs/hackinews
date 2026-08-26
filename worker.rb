@@ -11,21 +11,34 @@ class Worker
     value
   end
 
+  def self.max_consecutive_failures
+    Integer ENV.fetch('WORKER_MAX_FAILURES', '5')
+  end
+
   def self.run
     App.logger.info 'Fetching top stories...'
     fetched = Item.top_stories
-    if fetched
-      App.logger.info 'Done fetching top stories'
-    else
+    if fetched.nil?
       App.logger.error 'Skipped finish: top stories fetch failed'
+    elsif fetched.empty?
+      App.logger.error 'Done fetching top stories: none persisted'
+    else
+      App.logger.info "Done fetching top stories (#{fetched.size})"
     end
   end
 
   def self.start
+    failures = 0
     loop do
       run
+      failures = 0
     rescue StandardError => e
-      App.logger.error "Worker run failed (#{e.class}): #{e}"
+      failures += 1
+      App.logger.error "Worker run failed (#{e.class}): #{e}\n#{Array(e.backtrace).join("\n")}"
+      if failures >= max_consecutive_failures
+        App.logger.fatal "Worker exiting after #{failures} consecutive failures"
+        raise
+      end
     ensure
       sleep interval
     end

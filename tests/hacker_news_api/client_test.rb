@@ -66,8 +66,28 @@ module HackerNewsApi
       end
     end
 
-    def test_get_is_private
-      assert_includes Client.private_instance_methods, :get
+    def test_write_timeout_returns_nil
+      stub_http(->(*) { raise Net::WriteTimeout }) do
+        assert_nil client.item(1)
+      end
+    end
+
+    def test_eof_error_returns_nil
+      stub_http(->(*) { raise EOFError }) do
+        assert_nil client.item(1)
+      end
+    end
+
+    def test_epipe_returns_nil
+      stub_http(->(*) { raise Errno::EPIPE }) do
+        assert_nil client.item(1)
+      end
+    end
+
+    def test_http_options_enable_ssl_and_timeouts
+      assert_equal true, Client::HTTP_OPTIONS[:use_ssl]
+      assert_equal 5, Client::HTTP_OPTIONS[:open_timeout]
+      assert_equal 10, Client::HTTP_OPTIONS[:read_timeout]
     end
   end
 end

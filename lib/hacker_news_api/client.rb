@@ -12,17 +12,18 @@ module HackerNewsApi
 
     class FetchError < StandardError; end
 
+    HTTP_OPTIONS = { use_ssl: true, open_timeout: 5, read_timeout: 10 }.freeze
+
     EXPECTED_ERRORS = [
       FetchError,
       JSON::ParserError,
       Net::OpenTimeout,
       Net::ReadTimeout,
+      Net::WriteTimeout,
       OpenSSL::SSL::SSLError,
       SocketError,
-      Errno::ECONNREFUSED,
-      Errno::ECONNRESET,
-      Errno::EHOSTUNREACH,
-      Errno::ETIMEDOUT
+      IOError,
+      SystemCallError
     ].freeze
 
     def top_story_ids
@@ -71,10 +72,7 @@ module HackerNewsApi
     end
 
     def request(uri)
-      Net::HTTP.start(
-        uri.host, uri.port,
-        use_ssl: true, open_timeout: 5, read_timeout: 10
-      ) do |http|
+      Net::HTTP.start(uri.host, uri.port, **HTTP_OPTIONS) do |http|
         http.request Net::HTTP::Get.new(uri)
       end
     end

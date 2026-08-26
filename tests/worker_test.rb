@@ -5,9 +5,13 @@ require_relative '../worker'
 
 class WorkerTest < Minitest::Test
   def test_run_survives_nil_top_story_ids
-    Item.hn_client = FakeHnClient.new(top_story_ids: nil)
+    client = FakeHnClient.new(top_story_ids: nil)
+    Item.hn_client = client
 
     Worker.run
+
+    assert_includes client.calls, :top_story_ids
+    assert_equal 0, Item.count
   end
 
   def test_start_retries_after_a_failed_run
@@ -25,6 +29,17 @@ class WorkerTest < Minitest::Test
     end
 
     assert_equal 2, runs
+  end
+
+  def test_start_gives_up_after_consecutive_failures
+    Worker.stub :interval, 0.01 do
+      Worker.stub :max_consecutive_failures, 2 do
+        Worker.stub :run, -> { raise 'boom' } do
+          error = assert_raises(RuntimeError) { Worker.start }
+          assert_equal 'boom', error.message
+        end
+      end
+    end
   end
 
   def test_interval_rejects_zero

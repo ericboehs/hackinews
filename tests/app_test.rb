@@ -35,4 +35,26 @@ class AppTest < Minitest::Test
     assert_match(/Rust release/, last_response.body)
     refute_match(/Python news/, last_response.body)
   end
+
+  def test_story_with_malformed_url
+    create_item id: 1, title: 'Bad url', url: 'http://exa mple.com/foo', score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    assert_match(/Bad url/, last_response.body)
+  end
+
+  def test_story_with_uncached_comments
+    create_item id: 1, title: 'Has kids', kids: [2], score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    assert_match(/Comments could not be loaded/, last_response.body)
+    refute_match(/No comments/, last_response.body)
+  end
+
+  def test_suite_connects_to_test_database
+    db = ActiveRecord::Base.connection_db_config.database.to_s
+    assert db.end_with?('_test'), db
+  end
 end
