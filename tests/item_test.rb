@@ -135,4 +135,14 @@ class ItemTest < Minitest::Test
 
     assert_equal [2], parent.comments.map(&:id)
   end
+
+  def test_truncated_url_returns_host
+    item = create_item id: 1, url: 'https://example.com/path?q=1'
+    assert_equal 'example.com', item.truncated_url
+  end
+
+  def test_truncated_url_includes_x_username
+    item = create_item id: 1, url: 'https://x.com/somebody/status/1'
+    assert_equal 'x.com/somebody', item.truncated_url
+  end
 end

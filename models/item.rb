@@ -129,9 +129,13 @@ class Item < ActiveRecord::Base
     return [] if kids.blank?
 
     loaded = kids.map { |kid| Item.find_by id: kid }
+    missing = kids.zip(loaded).filter_map { |kid, rec| kid if rec.nil? }
     if loaded.all?(&:nil?)
-      App.logger.warn "Item #{id} comments not in cache"
+      App.logger.warn "Item #{id} comments not in cache: #{missing.join(', ')}"
       return nil
+    end
+    if missing.any?
+      App.logger.warn "Item #{id} missing cached comments: #{missing.join(', ')}"
     end
 
     loaded.compact

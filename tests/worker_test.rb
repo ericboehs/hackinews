@@ -4,12 +4,13 @@ require_relative 'test_helper'
 require_relative '../worker'
 
 class WorkerTest < Minitest::Test
-  def test_run_survives_nil_top_story_ids
+  def test_run_raises_when_top_story_ids_unavailable
     client = FakeHnClient.new(top_story_ids: nil)
     Item.hn_client = client
 
-    Worker.run
+    error = assert_raises(Worker::FetchFailed) { Worker.run }
 
+    assert_equal 'top story IDs unavailable', error.message
     assert_includes client.calls, :top_story_ids
     assert_equal 0, Item.count
   end
@@ -40,6 +41,27 @@ class WorkerTest < Minitest::Test
         end
       end
     end
+  end
+
+  def test_start_resets_failures_after_success
+    runs = 0
+
+    Worker.stub :interval, 0.01 do
+      Worker.stub :max_consecutive_failures, 2 do
+        Worker.stub :run, lambda {
+          runs += 1
+          case runs
+          when 1, 3 then raise Worker::FetchFailed, 'outage'
+          when 2 then nil
+          else throw :done
+          end
+        } do
+          catch(:done) { Worker.start }
+        end
+      end
+    end
+
+    assert_equal 4, runs
   end
 
   def test_interval_rejects_zero

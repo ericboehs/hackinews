@@ -11,6 +11,15 @@ if [ ! -f .env.local ]; then
   cp .env.example .env.local
 fi
 
+# Exported DATABASE_URL wins; otherwise read it from .env.local.
+if [ -z "${DATABASE_URL:-}" ] && [ -f .env.local ]; then
+  DATABASE_URL="$(grep -E '^DATABASE_URL=' .env.local | tail -1 | cut -d= -f2- || true)"
+  DATABASE_URL="${DATABASE_URL%\"}"
+  DATABASE_URL="${DATABASE_URL#\"}"
+  DATABASE_URL="${DATABASE_URL%\'}"
+  DATABASE_URL="${DATABASE_URL#\'}"
+fi
+
 # Keep host/user/port/query from DATABASE_URL; swap only the database name.
 swap_db() {
   local url="$1"
@@ -18,15 +27,26 @@ swap_db() {
   printf '%s\n' "$url" | sed -E "s#/[^/?]+(\\?.*)?\$#/${new_db}\\1#"
 }
 
+# pg_dump 17+ emits directives PG16 cannot load.
+sanitize_schema() {
+  local file=db/schema.sql
+  [ -f "$file" ] || return 0
+  grep -v -e '^\\restrict ' -e '^\\unrestrict ' -e '^SET transaction_timeout' "$file" > "${file}.tmp"
+  mv "${file}.tmp" "$file"
+}
+
 base_url="${DATABASE_URL:-postgres:///hackinews_development}"
 dev_url="$(swap_db "$base_url" hackinews_development)"
 test_url="$(swap_db "$base_url" hackinews_test)"
 
 echo "==> Ensuring databases exist and running migrations"
-DATABASE_URL="$dev_url" dbmate create
+# dbmate create fails when the DB already exists (exit 2). up will surface real errors.
+DATABASE_URL="$dev_url" dbmate create || true
 DATABASE_URL="$dev_url" dbmate up
-DATABASE_URL="$test_url" dbmate create
+sanitize_schema
+DATABASE_URL="$test_url" dbmate create || true
 DATABASE_URL="$test_url" dbmate up
+sanitize_schema
 
 echo
 echo "Setup complete. Start the app with: bin/dev"

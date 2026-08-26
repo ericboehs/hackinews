@@ -84,10 +84,33 @@ module HackerNewsApi
       end
     end
 
-    def test_http_options_enable_ssl_and_timeouts
-      assert_equal true, Client::HTTP_OPTIONS[:use_ssl]
-      assert_equal 5, Client::HTTP_OPTIONS[:open_timeout]
-      assert_equal 10, Client::HTTP_OPTIONS[:read_timeout]
+    def test_emfile_is_raised
+      stub_http(->(*) { raise Errno::EMFILE }) do
+        assert_raises(Errno::EMFILE) { client.item(1) }
+      end
+    end
+
+    def test_request_passes_ssl_host_and_timeouts
+      captured = nil
+      fake_response = response(code: '200', body: '[]')
+      original = Net::HTTP.method(:start)
+      Net::HTTP.define_singleton_method(:start) do |host, port = nil, *_rest, **opts, &blk|
+        captured = { host: host, port: port, opts: opts }
+        http = Object.new
+        http.define_singleton_method(:request) { |_| fake_response }
+        blk.call http
+      end
+
+      result = client.send(:request, URI('https://hacker-news.firebaseio.com/v0/topstories.json'))
+
+      assert_equal fake_response, result
+      assert_equal 'hacker-news.firebaseio.com', captured[:host]
+      assert_equal 443, captured[:port]
+      assert_equal true, captured[:opts][:use_ssl]
+      assert_equal 5, captured[:opts][:open_timeout]
+      assert_equal 10, captured[:opts][:read_timeout]
+    ensure
+      Net::HTTP.define_singleton_method(:start, original)
     end
   end
 end

@@ -22,8 +22,13 @@ module HackerNewsApi
       Net::WriteTimeout,
       OpenSSL::SSL::SSLError,
       SocketError,
-      IOError,
-      SystemCallError
+      EOFError,
+      Errno::EPIPE,
+      Errno::ECONNABORTED,
+      Errno::ECONNREFUSED,
+      Errno::ECONNRESET,
+      Errno::EHOSTUNREACH,
+      Errno::ETIMEDOUT
     ].freeze
 
     def top_story_ids
