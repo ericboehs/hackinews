@@ -33,14 +33,11 @@ GEM
     json (2.21.2)
     logger (1.7.0)
     method_source (1.1.0)
-    minitest (6.0.6)
-      drb (~> 2.0)
-      prism (~> 1.5)
+    minitest (5.27.0)
     mustermann (3.1.1)
     nio4r (2.7.5)
     pg (1.6.3)
     pg (1.6.3-arm64-darwin)
-    prism (1.9.0)
     pry (0.16.0)
       coderay (~> 1.1)
       method_source (~> 1.0)
@@ -83,7 +80,7 @@ PLATFORMS
 DEPENDENCIES
   activerecord
   dotenv
-  minitest
+  minitest (~> 5.25)
   pg
   pry
   puma

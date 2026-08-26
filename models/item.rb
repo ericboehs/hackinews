@@ -8,7 +8,13 @@ class Item < ActiveRecord::Base
   EXTENDED_TRUNCATION_DOMAINS = %w[github.com twitter.com x.com medium.com].freeze
 
   def self.top_stories
-    Item.where id: hn_client.top_story_ids.map { |id| prefetch id }
+    ids = hn_client.top_story_ids
+    unless ids
+      App.logger.error 'Failed to fetch top story IDs'
+      return nil
+    end
+
+    Item.where id: ids.filter_map { |id| prefetch id }
   end
 
   def self.min_score(score = 50)
@@ -29,23 +35,24 @@ class Item < ActiveRecord::Base
 
   def self.prefetch(id)
     item = Item.find_by id: id
-    payload = hn_client.item id
-    return id unless payload
+    return id if item && item.updated_at > 10.minutes.ago
 
-    if item && item.updated_at > 10.minutes.ago
-      id
-    elsif item
-      item.update data: payload, updated_at: Time.now.utc
-      item.prefetch_children
-      item.id
-    else
-      item = Item.create(id: id, data: payload)
-      item.prefetch_children
-      item.id
+    payload = hn_client.item id
+    unless payload
+      if item
+        App.logger.warn "Using stale cache for item #{id}; fetch failed"
+        return id
+      end
+      return nil
     end
-  rescue StandardError => e
-    App.logger.error "Failed to prefetch item #{id}: #{e}"
-    nil
+
+    if item
+      item.update data: payload, updated_at: Time.now.utc
+    else
+      item = Item.create!(id: id, data: payload)
+    end
+    item.prefetch_children
+    item.id
   end
 
   def self.remove_old_comments
@@ -55,18 +62,21 @@ class Item < ActiveRecord::Base
   end
 
   def prefetch_children
-    return unless data && data['kids']
+    if data.nil?
+      App.logger.error "Item #{id} has nil data; skipping children"
+      return
+    end
+    return unless data['kids']
 
-    data['kids']
-      .map { |kid| Item.prefetch kid }
-      .compact
-      .map { |id| Item.find_by id: id }
-      .compact
-      .map(&:prefetch_children)
+    data['kids'].each { |kid| Item.prefetch kid }
   end
 
   def truncated_url
-    return unless data && data['url']
+    if data.nil?
+      App.logger.error "Item #{id} has nil data"
+      return nil
+    end
+    return unless data['url']
 
     sanitized = data['url'].delete('#%')
                            .encode('ASCII', invalid: :replace, undef: :replace, replace: '')
@@ -77,7 +87,8 @@ class Item < ActiveRecord::Base
 
     username = uri.path.to_s[%r{/[^/]*}]
     "#{host}#{username}"
-  rescue URI::InvalidURIError
+  rescue URI::InvalidURIError => e
+    App.logger.warn "Item #{id} has invalid URL #{data['url'].inspect}: #{e}"
     nil
   end
 
@@ -85,11 +96,19 @@ class Item < ActiveRecord::Base
     @hn_client ||= HackerNewsApi::Client.new
   end
 
+  def self.hn_client=(client)
+    @hn_client = client
+  end
+
   def comments_url
     "https://news.ycombinator.com/item?id=#{data['id']}"
   end
 
   def comments
-    data['kids']&.map { |kid| Item.find_by id: kid }&.compact
+    if data.nil?
+      App.logger.error "Item #{id} has nil data"
+      return []
+    end
+    data['kids']&.map { |kid| Item.find_by id: kid }&.compact || []
   end
 end

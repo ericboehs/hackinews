@@ -3,33 +3,71 @@
 require_relative '../test_helper'
 
 module HackerNewsApi
-  # Tests the hacker news api client
   class ClientTest < Minitest::Test
-    def hacker_news_client
-      @hacker_news_client ||= HackerNewsApi::Client.new
+    def client
+      @client ||= Client.new
     end
 
-    def top_story_ids
-      @top_story_ids ||= hacker_news_client.top_story_ids
+    def stub_http(response_or_error)
+      client.stub :request, response_or_error do
+        yield
+      end
     end
 
-    def story
-      @story ||= hacker_news_client.story top_story_ids.last
+    def response(code:, body:)
+      Struct.new(:code, :body).new(code, body)
     end
 
-    def test_it_gets_top_story_ids
-      assert top_story_ids.count > 100
-      assert_kind_of Integer, top_story_ids.first
+    def test_top_story_ids_parses_json
+      stub_http(response(code: '200', body: '[1,2,3]')) do
+        assert_equal [1, 2, 3], client.top_story_ids
+      end
     end
 
-    def test_it_gets_a_story
-      assert_kind_of Integer, story['score']
-      assert story['title']
+    def test_item_parses_json
+      stub_http(response(code: '200', body: '{"id":42,"score":10}')) do
+        assert_equal({ 'id' => 42, 'score' => 10 }, client.item(42))
+      end
     end
 
-    def test_it_gets_an_item
-      item = hacker_news_client.item top_story_ids.first
-      assert_equal top_story_ids.first, item['id']
+    def test_http_500_returns_nil
+      stub_http(response(code: '500', body: 'nope')) do
+        assert_nil client.item(1)
+      end
+    end
+
+    def test_timeout_returns_nil
+      stub_http(->(*) { raise Net::OpenTimeout, 'slow' }) do
+        assert_nil client.top_story_ids
+      end
+    end
+
+    def test_read_timeout_returns_nil
+      stub_http(->(*) { raise Net::ReadTimeout, 'slow' }) do
+        assert_nil client.item(1)
+      end
+    end
+
+    def test_malformed_json_returns_nil
+      stub_http(response(code: '200', body: 'not-json')) do
+        assert_nil client.item(1)
+      end
+    end
+
+    def test_socket_error_returns_nil
+      stub_http(->(*) { raise SocketError, 'dns' }) do
+        assert_nil client.top_story_ids
+      end
+    end
+
+    def test_unexpected_error_is_raised
+      stub_http(->(*) { raise NoMethodError, 'bug' }) do
+        assert_raises(NoMethodError) { client.item(1) }
+      end
+    end
+
+    def test_get_is_private
+      assert_includes Client.private_instance_methods, :get
     end
   end
 end

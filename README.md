@@ -4,10 +4,10 @@ A personal Hacker News reader. Stories are cached in Postgres and can be filtere
 
 ## Requirements
 
-- Ruby 4.0+
+- Ruby 4.0
 - PostgreSQL
 - [dbmate](https://github.com/amacneil/dbmate) (`brew install dbmate`)
-- [overmind](https://github.com/DarthSim/overmind) or [foreman](https://github.com/ddollar/foreman) (optional, for `bin/dev`)
+- [overmind](https://github.com/DarthSim/overmind) or [foreman](https://github.com/ddollar/foreman) (required for `bin/dev`)
 
 ## Setup
 
@@ -15,7 +15,7 @@ A personal Hacker News reader. Stories are cached in Postgres and can be filtere
 bin/setup
 ```
 
-This installs gems, creates `hackinews_development` / `hackinews_test`, writes `.env.local` if missing, and runs migrations.
+This installs gems, creates `hackinews_development` / `hackinews_test`, writes `.env.local` if missing, and migrates both databases.
 
 `.env.local` is loaded first and overrides `.env`. A typical local value:
 
@@ -47,7 +47,7 @@ bundle exec rake worker             # one shot
 DATABASE_URL=postgres:///hackinews_test bundle exec rake test
 ```
 
-Client tests hit the live Hacker News API.
+HTTP and worker tests are stubbed; they do not hit the live Hacker News API.
 
 ## Console
 

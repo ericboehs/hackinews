@@ -4,18 +4,30 @@ require './app'
 
 # Fetches and caches Hacker News items
 class Worker
-  INTERVAL = Integer(ENV.fetch('WORKER_INTERVAL', '300'))
+  def self.interval
+    value = Integer ENV.fetch('WORKER_INTERVAL', '300')
+    raise ArgumentError, 'WORKER_INTERVAL must be positive' unless value.positive?
+
+    value
+  end
 
   def self.run
     App.logger.info 'Fetching top stories...'
-    Item.top_stories
-    App.logger.info 'Done fetching top stories'
+    fetched = Item.top_stories
+    if fetched
+      App.logger.info 'Done fetching top stories'
+    else
+      App.logger.error 'Skipped finish: top stories fetch failed'
+    end
   end
 
   def self.start
     loop do
       run
-      sleep INTERVAL
+    rescue StandardError => e
+      App.logger.error "Worker run failed (#{e.class}): #{e}"
+    ensure
+      sleep interval
     end
   end
 end

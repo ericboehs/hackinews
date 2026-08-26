@@ -2,12 +2,28 @@
 
 require 'json'
 require 'net/http'
+require 'openssl'
 require 'uri'
 
 module HackerNewsApi
   # Interfaces with Hacker News API
   class Client
     DEFAULT_COMMENT_LIMIT = 30
+
+    class FetchError < StandardError; end
+
+    EXPECTED_ERRORS = [
+      FetchError,
+      JSON::ParserError,
+      Net::OpenTimeout,
+      Net::ReadTimeout,
+      OpenSSL::SSL::SSLError,
+      SocketError,
+      Errno::ECONNREFUSED,
+      Errno::ECONNRESET,
+      Errno::EHOSTUNREACH,
+      Errno::ETIMEDOUT
+    ].freeze
 
     def top_story_ids
       get "#{base_url}/topstories.json"
@@ -37,27 +53,31 @@ module HackerNewsApi
       get "#{base_url}/item/#{id}.json"
     end
 
+    private
+
     def get(endpoint)
       logger.info "#{self.class}: Fetching #{endpoint}"
 
-      uri = URI endpoint
-      response = Net::HTTP.start(
+      response = request URI(endpoint)
+
+      unless (200..299).cover? response.code.to_i
+        raise FetchError, "Non-200: #{response.code}"
+      end
+
+      JSON.parse response.body
+    rescue *EXPECTED_ERRORS => e
+      logger.error "#{self.class}: Failed GET #{endpoint} (#{e.class}): #{e}"
+      nil
+    end
+
+    def request(uri)
+      Net::HTTP.start(
         uri.host, uri.port,
         use_ssl: true, open_timeout: 5, read_timeout: 10
       ) do |http|
         http.request Net::HTTP::Get.new(uri)
       end
-
-      raise "Non-200: #{response.code}" unless (200..299).cover? response.code.to_i
-
-      JSON.parse response.body
-    rescue StandardError => e
-      logger.error "#{self.class}: Failed get request: #{e}; " \
-                   "Response: #{response&.code} #{response&.body}"
-      nil
     end
-
-    private
 
     def logger
       App.logger
