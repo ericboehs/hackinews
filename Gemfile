@@ -12,10 +12,6 @@ gem 'rackup'
 gem 'rake'
 gem 'sinatra'
 
-group :development do
-  gem 'rerun'
-end
-
 group :development, :test do
   gem 'pry'
 end

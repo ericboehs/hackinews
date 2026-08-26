@@ -31,6 +31,7 @@ bin/dev
 
 - Web: [http://localhost:3000](http://localhost:3000)
 - Worker: fetches HN top stories every 5 minutes (`WORKER_INTERVAL`, seconds)
+- Restart the web process after code changes (`overmind restart web`)
 
 Or separately:
 

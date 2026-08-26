@@ -27,16 +27,10 @@ GEM
     connection_pool (3.0.2)
     dotenv (3.2.0)
     drb (2.2.3)
-    ffi (1.17.4)
-    ffi (1.17.4-arm64-darwin)
     i18n (1.15.2)
       concurrent-ruby (~> 1.0)
     io-console (0.9.2)
     json (2.21.2)
-    listen (3.10.0)
-      logger
-      rb-fsevent (~> 0.10, >= 0.10.3)
-      rb-inotify (~> 0.9, >= 0.9.10)
     logger (1.7.0)
     method_source (1.1.0)
     minitest (6.0.6)
@@ -66,13 +60,8 @@ GEM
     rackup (2.3.1)
       rack (>= 3)
     rake (13.4.2)
-    rb-fsevent (0.11.2)
-    rb-inotify (0.11.1)
-      ffi (~> 1.0)
     reline (0.7.0)
       io-console (~> 0.5)
-    rerun (0.14.0)
-      listen (~> 3.0)
     securerandom (0.4.1)
     sinatra (4.2.1)
       logger (>= 1.6.0)
@@ -101,7 +90,6 @@ DEPENDENCIES
   rack-test
   rackup
   rake
-  rerun
   sinatra
 
 RUBY VERSION
