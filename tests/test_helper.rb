@@ -7,6 +7,7 @@ require 'bundler/setup'
 require 'minitest/autorun'
 require 'minitest/pride'
 require 'minitest/mock'
+require 'stringio'
 
 require './app'
 
@@ -56,7 +57,20 @@ class FakeHnClient
   end
 end
 
+module LogCapture
+  # Redirects App.logger to a string for the duration of the block, so tests can
+  # assert on diagnostics without adding a writer to production code.
+  def capture_log
+    io = StringIO.new
+    App.stub :logger, Logger.new(io) do
+      yield
+    end
+    io.string
+  end
+end
+
 class Minitest::Test
   include ItemCleanup
   include ItemFactory
+  include LogCapture
 end

@@ -7,6 +7,35 @@ require_relative '../lib/hacker_news_api/client'
 class Item < ActiveRecord::Base
   class RefreshFailed < StandardError; end
 
+  # Loaded comments plus the ids that were not in the cache, so a view can tell
+  # "no comments" apart from "some comments are missing" at every nesting level.
+  class CommentSet
+    include Enumerable
+
+    attr_reader :records, :missing_ids
+
+    def initialize(records, missing_ids)
+      @records = records
+      @missing_ids = missing_ids
+    end
+
+    def each(&block)
+      records.each(&block)
+    end
+
+    def empty?
+      records.empty?
+    end
+
+    def missing?
+      missing_ids.any?
+    end
+
+    def missing_count
+      missing_ids.size
+    end
+  end
+
   EXTENDED_TRUNCATION_DOMAINS = %w[github.com twitter.com x.com medium.com].freeze
 
   def self.top_stories
@@ -135,18 +164,12 @@ class Item < ActiveRecord::Base
     end
 
     kids = data['kids']
-    return [] if kids.blank?
+    return CommentSet.new([], []) if kids.blank?
 
-    loaded = kids.map { |kid| Item.find_by id: kid }
-    missing = kids.zip(loaded).filter_map { |kid, rec| kid if rec.nil? }
-    if loaded.all?(&:nil?)
-      App.logger.warn "Item #{id} comments not in cache: #{missing.join(', ')}"
-      return nil
-    end
-    if missing.any?
-      App.logger.warn "Item #{id} missing cached comments: #{missing.join(', ')}"
-    end
+    loaded = kids.index_with { |kid| Item.find_by id: kid }
+    missing = loaded.select { |_, rec| rec.nil? }.keys
+    App.logger.warn "Item #{id} missing cached comments: #{missing.join(', ')}" if missing.any?
 
-    loaded.compact
+    CommentSet.new(loaded.values.compact, missing)
   end
 end

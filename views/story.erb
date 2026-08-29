@@ -24,7 +24,7 @@
 
 <% if comments.nil? %>
   <p class="uk-placeholder uk-text-center">Comments could not be loaded.</p>
-<% elsif comments.empty? %>
+<% elsif comments.empty? && !comments.missing? %>
   <p class="uk-placeholder uk-text-center">No comments.</p>
 <% end %>
 

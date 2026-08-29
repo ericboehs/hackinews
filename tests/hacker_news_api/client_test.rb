@@ -14,8 +14,12 @@ module HackerNewsApi
       end
     end
 
-    def response(code:, body:)
-      Struct.new(:code, :body).new(code, body)
+    def response(code:, body:, headers: {})
+      Struct.new(:code, :body, :headers) do
+        def [](name)
+          headers[name]
+        end
+      end.new(code, body, headers)
     end
 
     def test_top_story_ids_parses_json
@@ -34,6 +38,39 @@ module HackerNewsApi
       stub_http(response(code: '500', body: 'nope')) do
         assert_nil client.item(1)
       end
+    end
+
+    def test_failure_logs_status_and_body
+      out = capture_log do
+        stub_http(response(code: '503', body: 'upstream is down')) { client.item(1) }
+      end
+      assert_match(/HTTP 503/, out)
+      assert_match(/upstream is down/, out)
+    end
+
+    def test_failure_logs_retry_after_when_throttled
+      out = capture_log do
+        stub_http(response(code: '429', body: 'slow down', headers: { 'Retry-After' => '120' })) do
+          client.item(1)
+        end
+      end
+      assert_match(/HTTP 429/, out)
+      assert_match(/retry-after="120"/, out)
+    end
+
+    def test_failure_body_is_truncated
+      out = capture_log do
+        stub_http(response(code: '500', body: 'x' * 5_000)) { client.item(1) }
+      end
+      refute_match(/x{1000}/, out)
+      assert_match(/x{200}/, out)
+    end
+
+    def test_failure_omits_retry_after_when_absent
+      out = capture_log do
+        stub_http(response(code: '500', body: 'boom')) { client.item(1) }
+      end
+      refute_match(/retry-after/, out)
     end
 
     def test_timeout_returns_nil

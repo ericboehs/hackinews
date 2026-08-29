@@ -49,8 +49,36 @@ class AppTest < Minitest::Test
 
     get '/stories/1'
     assert last_response.ok?
-    assert_match(/Comments could not be loaded/, last_response.body)
+    assert_match(/1\s+comment is\s+not cached yet/, last_response.body)
     refute_match(/No comments/, last_response.body)
+  end
+
+  def test_story_discloses_partially_cached_comments
+    create_item id: 2, type: 'comment'
+    create_item id: 1, title: 'Has kids', kids: [2, 3], score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    assert_match(/1\s+comment is\s+not cached yet/, last_response.body)
+    refute_match(/No comments/, last_response.body)
+  end
+
+  def test_story_discloses_missing_nested_replies
+    create_item id: 3, type: 'comment', kids: [4]
+    create_item id: 1, title: 'Has kids', kids: [3], score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    assert_match(/1\s+comment is\s+not cached yet/, last_response.body)
+  end
+
+  def test_story_with_no_comments_says_so
+    create_item id: 1, title: 'Lonely', score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    assert_match(/No comments/, last_response.body)
+    refute_match(/not cached yet/, last_response.body)
   end
 
   def test_suite_connects_to_test_database
