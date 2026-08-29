@@ -1,3 +1,5 @@
+-- Dumped from database version 16.15 (Postgres.app)
+
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
@@ -30,7 +32,7 @@ CREATE TABLE public.items (
 --
 
 CREATE TABLE public.schema_migrations (
-    version character varying(255) NOT NULL
+    version character varying NOT NULL
 );
 
 

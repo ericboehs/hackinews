@@ -1,10 +1,36 @@
 # frozen_string_literal: true
 
+require 'json'
 require 'net/http'
+require 'openssl'
+require 'uri'
 
 module HackerNewsApi
   # Interfaces with Hacker News API
   class Client
+    DEFAULT_COMMENT_LIMIT = 30
+
+    class FetchError < StandardError; end
+
+    HTTP_OPTIONS = { use_ssl: true, open_timeout: 5, read_timeout: 10 }.freeze
+
+    EXPECTED_ERRORS = [
+      FetchError,
+      JSON::ParserError,
+      Net::OpenTimeout,
+      Net::ReadTimeout,
+      Net::WriteTimeout,
+      OpenSSL::SSL::SSLError,
+      SocketError,
+      EOFError,
+      Errno::EPIPE,
+      Errno::ECONNABORTED,
+      Errno::ECONNREFUSED,
+      Errno::ECONNRESET,
+      Errno::EHOSTUNREACH,
+      Errno::ETIMEDOUT
+    ].freeze
+
     def top_story_ids
       get "#{base_url}/topstories.json"
     end
@@ -17,8 +43,8 @@ module HackerNewsApi
       get "#{base_url}/newstories.json"
     end
 
-    def comments(item_json, limit = LIMIT)
-      item_json['kids'].first(limit).map { |kid| item kid }
+    def comments(item_json, limit = DEFAULT_COMMENT_LIMIT)
+      Array(item_json['kids']).first(limit).map { |kid| item kid }
     end
 
     def comment(id)
@@ -33,30 +59,31 @@ module HackerNewsApi
       get "#{base_url}/item/#{id}.json"
     end
 
-    def get(endpoint)
-      App.logger.info "#{self.class}: Fetching #{endpoint}"
-
-      http, request = setup_get_request endpoint
-      response = http.request request
-      raise 'Non-200' unless (200..300).include? response.code.to_i
-
-      JSON.parse response.body
-    rescue StandardError => e
-      handle_http_exception e, response
-    end
-
     private
 
-    def setup_get_request(endpoint)
-      uri = URI endpoint
-      request = Net::HTTP::Get.new uri
-      http = Net::HTTP.start uri.host, uri.port, use_ssl: true
-      [http, request]
+    def get(endpoint)
+      logger.info "#{self.class}: Fetching #{endpoint}"
+
+      response = request URI(endpoint)
+
+      unless (200..299).cover? response.code.to_i
+        raise FetchError, "Non-200: #{response.code}"
+      end
+
+      JSON.parse response.body
+    rescue *EXPECTED_ERRORS => e
+      logger.error "#{self.class}: Failed GET #{endpoint} (#{e.class}): #{e}"
+      nil
     end
 
-    def handle_http_exception(exception, response)
-      App.logger.error "#{self.class}: Failed get request: #{exception}; " \
-        "Response: #{response.code} #{response.body}"
+    def request(uri)
+      Net::HTTP.start(uri.host, uri.port, **HTTP_OPTIONS) do |http|
+        http.request Net::HTTP::Get.new(uri)
+      end
+    end
+
+    def logger
+      App.logger
     end
 
     def base_url

@@ -1,0 +1,60 @@
+# frozen_string_literal: true
+
+require_relative 'test_helper'
+require 'rack/test'
+
+class AppTest < Minitest::Test
+  include Rack::Test::Methods
+
+  def app
+    App
+  end
+
+  def test_home_page
+    get '/'
+    assert last_response.ok?
+    assert_match(/HackiNews/, last_response.body)
+  end
+
+  def test_home_page_filters_by_min_score
+    create_item id: 1, title: 'Low scoring', score: 10
+    create_item id: 2, title: 'High scoring', score: 250
+
+    get '/', min_score: '200'
+    assert last_response.ok?
+    assert_match(/High scoring/, last_response.body)
+    refute_match(/Low scoring/, last_response.body)
+  end
+
+  def test_home_page_title_search
+    create_item id: 1, title: 'Rust release', score: 100
+    create_item id: 2, title: 'Python news', score: 100
+
+    get '/', q: 'Rust', min_score: '0'
+    assert last_response.ok?
+    assert_match(/Rust release/, last_response.body)
+    refute_match(/Python news/, last_response.body)
+  end
+
+  def test_story_with_malformed_url
+    create_item id: 1, title: 'Bad url', url: 'http://exa mple.com/foo', score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    assert_match(/Bad url/, last_response.body)
+  end
+
+  def test_story_with_uncached_comments
+    create_item id: 1, title: 'Has kids', kids: [2], score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    assert_match(/Comments could not be loaded/, last_response.body)
+    refute_match(/No comments/, last_response.body)
+  end
+
+  def test_suite_connects_to_test_database
+    db = ActiveRecord::Base.connection_db_config.database.to_s
+    assert db.end_with?('_test'), db
+  end
+end
