@@ -108,17 +108,24 @@ class AppTest < Minitest::Test
     assert db.end_with?('_test'), db
   end
 
+  # VERBOSE is set explicitly rather than assumed unset, so the suite still
+  # passes when run as `VERBOSE=1 bundle exec rake test`.
   def test_logs_are_quiet_under_test_unless_verbose
-    assert_predicate App, :quiet_logs?
+    with_env 'VERBOSE' => '' do
+      assert_predicate App, :quiet_logs?
+      assert_equal IO::NULL, App.log_device
+    end
 
     with_env 'VERBOSE' => '1' do
       refute_predicate App, :quiet_logs?
+      assert_same $stdout, App.log_device
     end
   end
 
   def test_logs_are_not_quiet_outside_test
-    with_env 'RACK_ENV' => 'production' do
+    with_env 'RACK_ENV' => 'production', 'VERBOSE' => '' do
       refute_predicate App, :quiet_logs?
+      assert_same $stdout, App.log_device
     end
   end
 end
