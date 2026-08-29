@@ -1,0 +1,16 @@
+#!/bin/sh
+# Runs before the container's main process.
+#
+# The web service migrates on boot; the worker sets RUN_MIGRATIONS=false so two
+# containers starting together cannot race each other applying the same
+# migration.
+set -e
+
+if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
+  echo "==> Waiting for the database and applying migrations"
+  # --no-dump-schema: db/schema.sql is a build artifact here and the runtime
+  # user has no reason to rewrite it.
+  dbmate --wait --wait-timeout 60s --no-dump-schema up
+fi
+
+exec "$@"

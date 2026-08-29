@@ -1,0 +1,13 @@
+.git
+.github
+.bundle
+vendor/bundle
+tests
+tmp
+log
+*.log
+.env
+.env.*
+!.env.example
+README.md
+Procfile.dev
