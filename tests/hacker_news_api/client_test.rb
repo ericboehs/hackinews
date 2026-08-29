@@ -4,6 +4,8 @@ require_relative '../test_helper'
 
 module HackerNewsApi
   class ClientTest < Minitest::Test
+    BODY_LIMIT = Client::BODY_LOG_LIMIT
+
     def client
       @client ||= Client.new
     end
@@ -60,10 +62,10 @@ module HackerNewsApi
 
     def test_failure_body_is_truncated
       out = capture_log do
-        stub_http(response(code: '500', body: 'x' * 5_000)) { client.item(1) }
+        stub_http(response(code: '500', body: "#{'x' * BODY_LIMIT}CUTOFF-MARKER")) { client.item(1) }
       end
-      refute_match(/x{1000}/, out)
-      assert_match(/x{200}/, out)
+      assert_match(/x{#{BODY_LIMIT}}/, out)
+      refute_match(/CUTOFF-MARKER/, out)
     end
 
     def test_failure_omits_retry_after_when_absent

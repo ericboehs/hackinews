@@ -163,7 +163,8 @@ class ItemTest < Minitest::Test
     assert_equal 1, comments.missing_count
   end
 
-  # data is NOT NULL, so this is only reachable for an unsaved record.
+  # The NOT NULL constraint keeps stored rows from having null data, so this
+  # guard only covers unsaved or in-memory-modified objects.
   def test_comments_nil_when_data_is_nil
     assert_nil Item.new(id: 1).comments
   end

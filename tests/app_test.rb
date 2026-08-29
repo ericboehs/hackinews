@@ -70,6 +70,28 @@ class AppTest < Minitest::Test
     get '/stories/1'
     assert last_response.ok?
     assert_match(/1\s+comment is\s+not cached yet/, last_response.body)
+    # The notice links to the comment permalink, not the story, proving the
+    # parent is threaded through the recursive render.
+    assert_match(%r{not cached yet.*?item\?id=3}m, last_response.body)
+  end
+
+  def test_story_with_fully_cached_comments_shows_no_warning
+    create_item id: 2, type: 'comment'
+    create_item id: 3, type: 'comment'
+    create_item id: 1, title: 'Has kids', kids: [2, 3], score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    refute_match(/not cached yet/, last_response.body)
+    refute_match(/No comments/, last_response.body)
+  end
+
+  def test_story_pluralizes_missing_comment_notice
+    create_item id: 1, title: 'Has kids', kids: [2, 3], score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    assert_match(/2\s+comments are\s+not cached yet/, last_response.body)
   end
 
   def test_story_with_no_comments_says_so

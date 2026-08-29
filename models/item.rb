@@ -15,8 +15,8 @@ class Item < ActiveRecord::Base
     attr_reader :records, :missing_ids
 
     def initialize(records, missing_ids)
-      @records = records
-      @missing_ids = missing_ids
+      @records = records.freeze
+      @missing_ids = missing_ids.freeze
     end
 
     def each(&block)

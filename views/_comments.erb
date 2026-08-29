@@ -16,17 +16,18 @@
           </article>
 
           <% replies = comment.comments %>
-          <%= erb :_comments, layout: false, locals: { comments: replies } %>
+          <%= erb :_comments, layout: false, locals: { comments: replies, parent: comment } %>
         </div>
       </li>
     <% end %>
   </ul>
 <% end %>
 
-<% if comments.respond_to?(:missing?) && comments.missing? %>
+<% if comments&.missing? %>
   <p class="uk-text-meta uk-text-italic">
     <%= comments.missing_count %>
     <%= comments.missing_count == 1 ? 'comment is' : 'comments are' %>
-    not cached yet.
+    not cached yet &mdash;
+    <a href="<%= parent.comments_url %>">read on Hacker News</a>.
   </p>
 <% end %>
