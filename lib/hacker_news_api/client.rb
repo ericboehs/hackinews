@@ -10,6 +10,9 @@ module HackerNewsApi
   class Client
     DEFAULT_COMMENT_LIMIT = 30
 
+    # Cap on how much of a failed response body reaches the log.
+    BODY_LOG_LIMIT = 200
+
     class FetchError < StandardError; end
 
     HTTP_OPTIONS = { use_ssl: true, open_timeout: 5, read_timeout: 10 }.freeze
@@ -66,14 +69,23 @@ module HackerNewsApi
 
       response = request URI(endpoint)
 
-      unless (200..299).cover? response.code.to_i
-        raise FetchError, "Non-200: #{response.code}"
-      end
+      raise FetchError, failure_details(response) unless (200..299).cover? response.code.to_i
 
       JSON.parse response.body
     rescue *EXPECTED_ERRORS => e
       logger.error "#{self.class}: Failed GET #{endpoint} (#{e.class}): #{e}"
       nil
+    end
+
+    # Enough of the response to tell throttling (429 + Retry-After) apart from a
+    # server fault, without dumping an unbounded body into the log.
+    def failure_details(response)
+      details = ["HTTP #{response.code}"]
+      retry_after = response['Retry-After']
+      details << "retry-after=#{retry_after.inspect}" if retry_after
+      body = response.body.to_s.strip
+      details << "body=#{body[0, BODY_LOG_LIMIT].inspect}" unless body.empty?
+      details.join('; ')
     end
 
     def request(uri)

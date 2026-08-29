@@ -139,11 +139,34 @@ class ItemTest < Minitest::Test
   end
 
   def test_comments_empty_when_no_kids
-    assert_equal [], create_item(id: 1).comments
+    comments = create_item(id: 1).comments
+
+    assert_empty comments.to_a
+    refute_predicate comments, :missing?
   end
 
-  def test_comments_nil_when_kids_missing_from_cache
-    assert_nil create_item(id: 1, kids: [2, 3]).comments
+  def test_comments_reports_all_kids_missing_from_cache
+    comments = create_item(id: 1, kids: [2, 3]).comments
+
+    assert_empty comments.to_a
+    assert_predicate comments, :missing?
+    assert_equal [2, 3], comments.missing_ids
+  end
+
+  def test_comments_reports_partially_missing_kids
+    create_item id: 2, type: 'comment'
+    comments = create_item(id: 1, kids: [2, 3]).comments
+
+    assert_equal [2], comments.map(&:id)
+    assert_predicate comments, :missing?
+    assert_equal [3], comments.missing_ids
+    assert_equal 1, comments.missing_count
+  end
+
+  # The NOT NULL constraint keeps stored rows from having null data, so this
+  # guard only covers unsaved or in-memory-modified objects.
+  def test_comments_nil_when_data_is_nil
+    assert_nil Item.new(id: 1).comments
   end
 
   def test_comments_returns_cached_kids
