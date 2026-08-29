@@ -21,7 +21,7 @@ jobs:
           --health-retries 10
     env:
       RACK_ENV: test
-      DATABASE_URL: postgres://postgres@localhost/hackinews_test
+      DATABASE_URL: postgres://postgres@localhost/hackinews_test?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: ruby/setup-ruby@v1
