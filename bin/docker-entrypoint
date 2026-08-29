@@ -1,0 +1,27 @@
+#!/bin/sh
+# Applies pending migrations, then hands off to the container's command.
+#
+# Migrations are NOT serialized across containers. Every container that starts
+# with RUN_MIGRATIONS unset will try to migrate, and dbmate takes no
+# cross-process lock. Deployments must therefore set RUN_MIGRATIONS=false on
+# every process that is not the single designated migrator (the worker, and any
+# web replica beyond the first).
+set -e
+
+case "${RUN_MIGRATIONS:-true}" in
+  true)
+    echo "==> Waiting for the database and applying migrations"
+    # --no-dump-schema: db/schema.sql is a build artifact here and the runtime
+    # user has no reason to rewrite it.
+    dbmate --wait --wait-timeout 60s --no-dump-schema up
+    ;;
+  false)
+    echo "==> Skipping migrations (RUN_MIGRATIONS=false)"
+    ;;
+  *)
+    echo "ERROR: RUN_MIGRATIONS must be 'true' or 'false', got '${RUN_MIGRATIONS}'" >&2
+    exit 64
+    ;;
+esac
+
+exec "$@"
