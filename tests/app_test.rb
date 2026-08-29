@@ -107,4 +107,18 @@ class AppTest < Minitest::Test
     db = ActiveRecord::Base.connection_db_config.database.to_s
     assert db.end_with?('_test'), db
   end
+
+  def test_logs_are_quiet_under_test_unless_verbose
+    assert_predicate App, :quiet_logs?
+
+    with_env 'VERBOSE' => '1' do
+      refute_predicate App, :quiet_logs?
+    end
+  end
+
+  def test_logs_are_not_quiet_outside_test
+    with_env 'RACK_ENV' => 'production' do
+      refute_predicate App, :quiet_logs?
+    end
+  end
 end

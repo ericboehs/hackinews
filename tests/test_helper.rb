@@ -69,8 +69,19 @@ module LogCapture
   end
 end
 
+module EnvHelper
+  def with_env(vars)
+    original = ENV.to_hash.slice(*vars.keys)
+    ENV.update vars
+    yield
+  ensure
+    vars.each_key { |k| original.key?(k) ? ENV[k] = original[k] : ENV.delete(k) }
+  end
+end
+
 class Minitest::Test
   include ItemCleanup
   include ItemFactory
   include LogCapture
+  include EnvHelper
 end

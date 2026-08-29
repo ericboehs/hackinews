@@ -28,7 +28,13 @@ class App < Sinatra::Base
   end
 
   def self.logger
-    @logger ||= Logger.new $stdout
+    @logger ||= Logger.new(quiet_logs? ? IO::NULL : $stdout)
+  end
+
+  # The suite deliberately drives failure paths, and their warnings drown out
+  # the output that actually signals a broken test. Set VERBOSE=1 to see them.
+  def self.quiet_logs?
+    ENV['RACK_ENV'] == 'test' && ENV['VERBOSE'].to_s.empty?
   end
 
   before do
