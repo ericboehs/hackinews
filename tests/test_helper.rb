@@ -40,7 +40,8 @@ module ItemFactory
     Item.create!(id: id, data: data, created_at: updated_at, updated_at: updated_at)
   end
 
-  # HN tombstones carry no author, text, or title -- only id/type/time/parent.
+  # Minimal deleted/dead comment fixture: no author, text, or title, mirroring
+  # what HN returns for a tombstone. Accepts kids so threaded cases can be built.
   def create_tombstone(id:, kind: 'deleted', kids: nil, time: Time.now.to_i)
     data = { 'id' => id, 'type' => 'comment', 'time' => time, kind => true }
     data['kids'] = kids if kids

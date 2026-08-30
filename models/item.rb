@@ -155,8 +155,8 @@ class Item < ActiveRecord::Base
 
   # HN keeps tombstones for removed comments. Deleted ones carry no author or
   # text at all, so rendering them yields an empty shell; dead ones are
-  # moderated out of the default view. Both are hidden unless they have replies,
-  # in which case a placeholder keeps the thread structure intact.
+  # moderated out of the default view but can still carry text. Whether a
+  # tombstone is shown is decided in #comments, not here.
   def hidden?
     return false if data.nil?
 
