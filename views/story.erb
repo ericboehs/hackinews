@@ -1,7 +1,7 @@
 <article class="uk-article">
   <h3>
-    <% if @story.data['url'] %>
-      <a href="<%= safe_url @story.data['url'] %>" class="uk-display-block">
+    <% if (story_url = safe_url(@story.data['url'], item_id: @story.id)) %>
+      <a href="<%= story_url %>" class="uk-display-block">
         <%= h @story.data['title'] %>
         <span class="uk-text-meta">(<%= h @story.truncated_url %>)</span>
       </a>

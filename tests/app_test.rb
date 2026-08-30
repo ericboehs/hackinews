@@ -278,9 +278,34 @@ class AppTest < Minitest::Test
   def test_javascript_urls_are_not_rendered_as_links
     create_item id: 1, title: 'Bad', score: 100, url: 'javascript:alert(1)'
 
-    get '/stories/1'
+    capture_log { get '/stories/1' }
 
-    refute_includes last_response.body, 'javascript:alert(1)'
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, 'Bad'
+    refute_includes last_response.body, 'javascript:'
+    # Falls back to the HN discussion rather than rendering a dead href="".
+    assert_includes last_response.body, 'news.ycombinator.com/item?id=1'
+  end
+
+  def test_javascript_urls_are_not_rendered_on_the_homepage
+    create_item id: 1, title: 'Bad', score: 100, url: 'javascript:alert(1)'
+
+    capture_log { get '/' }
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, 'Bad'
+    refute_includes last_response.body, 'javascript:'
+  end
+
+  # mailto: raises URI::InvalidComponentError, which is not a subclass of
+  # URI::InvalidURIError and would otherwise 500 the page.
+  def test_unparseable_url_does_not_error_the_page
+    create_item id: 1, title: 'Odd', score: 100, url: 'mailto:x'
+
+    capture_log { get '/stories/1' }
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, 'Odd'
   end
 
   def test_ordinary_urls_still_render
@@ -299,8 +324,11 @@ class AppTest < Minitest::Test
     get '/'
 
     assert last_response.headers['ETag'], 'expected an ETag'
-    assert last_response.headers['Last-Modified'], 'expected Last-Modified'
-    assert_includes last_response.headers['Cache-Control'], 'public'
+    cache_control = last_response.headers['Cache-Control']
+
+    assert_includes cache_control, 'public'
+    assert_includes cache_control, 'must-revalidate'
+    assert_includes cache_control, 'max-age=30'
   end
 
   def test_homepage_returns_304_when_unchanged
@@ -325,17 +353,50 @@ class AppTest < Minitest::Test
     assert_equal 304, last_response.status
   end
 
-  def test_etag_changes_when_a_comment_is_added
+  def test_adding_a_comment_invalidates_the_story_cache
     create_item id: 1, score: 100
     get '/stories/1'
     before = last_response.headers['ETag']
 
-    create_item id: 2, type: 'comment', text: 'new'
+    create_item id: 2, type: 'comment', text: 'brand new reply'
     Item.find(1).update! data: Item.find(1).data.merge('kids' => [2])
-    get '/stories/1'
 
-    refute_equal before, last_response.headers['ETag']
+    get '/stories/1', {}, 'HTTP_IF_NONE_MATCH' => before
+
     assert_equal 200, last_response.status
+    assert_includes last_response.body, 'brand new reply'
+  end
+
+  def test_editing_a_comment_invalidates_the_story_cache
+    create_item id: 2, type: 'comment', text: 'original'
+    create_item id: 1, score: 100, kids: [2]
+    get '/stories/1'
+    before = last_response.headers['ETag']
+
+    Item.find(2).update! data: Item.find(2).data.merge('text' => 'edited text')
+
+    get '/stories/1', {}, 'HTTP_IF_NONE_MATCH' => before
+
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, 'edited text'
+  end
+
+  # A story leaving the score filter while another replaces it leaves both the
+  # row count and the newest timestamp unchanged, so the ETag must also depend
+  # on which rows are in the result.
+  def test_membership_change_invalidates_the_homepage_cache
+    stamp = 2.hours.ago
+    501.times { |i| create_item id: i + 1, title: "Story #{i + 1}", score: 100, time: i, updated_at: stamp }
+    get '/'
+    before = last_response.headers['ETag']
+
+    # Drop one displayed story below the threshold without touching the newest.
+    demoted = Item.order(Arel.sql("data->'time' desc")).offset(10).first
+    demoted.update! data: demoted.data.merge('score' => 1), updated_at: stamp
+
+    get '/', {}, 'HTTP_IF_NONE_MATCH' => before
+
+    assert_equal 200, last_response.status, 'membership changed, must not 304'
   end
 
   # --- listing scope --------------------------------------------------------

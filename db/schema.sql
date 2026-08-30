@@ -57,6 +57,13 @@ ALTER TABLE ONLY public.schema_migrations
 
 
 --
+-- Name: index_items_on_story_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_items_on_story_time ON public.items USING btree (((data -> 'time'::text)) DESC) WHERE ((data ->> 'type'::text) = 'story'::text);
+
+
+--
 -- PostgreSQL database dump complete
 --
 
