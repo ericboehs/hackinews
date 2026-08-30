@@ -205,6 +205,7 @@ class AppTest < Minitest::Test
 
     assert_equal 404, last_response.status
     assert_match(/Story not found/, last_response.body)
+    assert_match(/pruned from the cache/, last_response.body)
   end
 
   def test_non_numeric_story_id_returns_404
@@ -215,6 +216,21 @@ class AppTest < Minitest::Test
 
   def test_unknown_path_returns_404
     get '/nope'
+
+    assert_equal 404, last_response.status
+  end
+
+  def test_unknown_path_uses_generic_wording
+    get '/nope'
+
+    assert_equal 404, last_response.status
+    assert_match(/Page not found/, last_response.body)
+    refute_match(/Story not found/, last_response.body)
+  end
+
+  # Larger than int4; would otherwise raise in the adapter and return a 500.
+  def test_out_of_range_story_id_returns_404
+    get '/stories/99999999999999'
 
     assert_equal 404, last_response.status
   end

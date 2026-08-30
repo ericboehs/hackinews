@@ -38,32 +38,27 @@ class Item < ActiveRecord::Base
 
   EXTENDED_TRUNCATION_DOMAINS = %w[github.com twitter.com x.com medium.com].freeze
 
-  # HN threads are far shallower than this; the bound only exists so a cycle in
-  # the data cannot spin the recursive CTE forever.
-  MAX_THREAD_DEPTH = 50
-
-  # Walks kids ids down from a root in a single query. jsonb_array_elements_text
-  # yields nothing for items without kids, which terminates the recursion, and
-  # the join hits the primary key. Expanding kids with CROSS JOIN LATERAL rather
-  # than `id IN (SELECT ...)` matters enormously: the IN form plans as a nested
-  # loop over the whole table and takes ~87s where this takes ~20ms.
+  # Expanding kids with CROSS JOIN LATERAL rather than `id IN (SELECT
+  # jsonb_array_elements_text(...))` is load-bearing: the IN form plans as a
+  # nested loop over the whole table and is orders of magnitude slower. CYCLE
+  # makes the walk terminate on a cycle in the data without capping depth, so
+  # deep threads are returned in full.
   THREAD_SQL = <<~SQL
     WITH RECURSIVE tree AS (
-      SELECT i.*, 0 AS depth FROM items i WHERE i.id = ?
+      SELECT i.id, i.data, i.created_at, i.updated_at FROM items i WHERE i.id = ?
       UNION ALL
-      SELECT c.*, t.depth + 1
+      SELECT c.id, c.data, c.created_at, c.updated_at
       FROM tree t
       CROSS JOIN LATERAL jsonb_array_elements_text(t.data->'kids') AS k(kid)
       JOIN items c ON c.id = k.kid::bigint
-      WHERE t.depth < ?
-    )
+    ) CYCLE id SET is_cycle USING path
     SELECT id, data, created_at, updated_at FROM tree
   SQL
 
-  # Loads an entire comment tree in one query and points every record at the
-  # shared index, so rendering the thread issues no further queries.
-  def self.thread(root_id, max_depth: MAX_THREAD_DEPTH)
-    records = find_by_sql [THREAD_SQL, root_id, max_depth]
+  # Loads a comment tree in one query and points every record at the shared
+  # index, so rendering the thread issues no further queries.
+  def self.thread(root_id)
+    records = find_by_sql [THREAD_SQL, root_id]
     index = records.index_by(&:id)
     records.each { |record| record.comment_index = index }
     index
@@ -139,36 +134,39 @@ class Item < ActiveRecord::Base
     [item.id, :refreshed]
   end
 
-  # Retained stories, newest first. Everything not reachable from these is
-  # dropped, so this also bounds how far back the homepage can reach.
-  KEEP_STORIES = 200
-
   # The old implementation matched `data->'parent' IN (old story ids)`, which
   # only ever deleted a story's *direct* replies -- every nested reply beneath
   # them was orphaned and kept forever. Walking the tree deletes whole threads.
+  # CYCLE rather than a depth cap matters here: a cap would classify deep
+  # descendants of a *retained* story as unreachable and delete them.
   PRUNE_SQL = <<~SQL
     WITH RECURSIVE keep AS (
-      SELECT i.id, i.data, 0 AS depth FROM items i WHERE i.id IN (?)
+      SELECT i.id, i.data FROM items i WHERE i.id IN (?)
       UNION ALL
-      SELECT c.id, c.data, k.depth + 1
+      SELECT c.id, c.data
       FROM keep k
       CROSS JOIN LATERAL jsonb_array_elements_text(k.data->'kids') AS kk(kid)
       JOIN items c ON c.id = kk.kid::bigint
-      WHERE k.depth < ?
-    )
+    ) CYCLE id SET is_cycle USING path
     DELETE FROM items WHERE NOT EXISTS (SELECT 1 FROM keep WHERE keep.id = items.id)
   SQL
 
-  def self.prune(keep: KEEP_STORIES, max_depth: MAX_THREAD_DEPTH)
-    keep_ids = stories.order(id: :desc).limit(keep).pluck(:id)
+  # Deletes every item not reachable from the given stories. The retained set is
+  # always supplied by the caller -- the worker passes the current top-story
+  # list -- so the cache tracks what the site actually serves and evicts stories
+  # as they rotate off. There is deliberately no default: measured against
+  # production, a "keep the newest N stories" heuristic evicted 80% of the cache
+  # including stories still on the front page, which the worker then refetched.
+  def self.prune(keep_ids)
+    keep_ids = Array(keep_ids).compact
     # Without this the keep set is empty and the delete would wipe the table.
     if keep_ids.empty?
       App.logger.warn 'Prune skipped: no stories to keep'
       return 0
     end
 
-    deleted = connection.delete sanitize_sql_array([PRUNE_SQL, keep_ids, max_depth])
-    App.logger.info "Pruned #{deleted} items outside the newest #{keep_ids.size} stories"
+    deleted = connection.delete sanitize_sql_array([PRUNE_SQL, keep_ids])
+    App.logger.info "Pruned #{deleted} items outside #{keep_ids.size} retained stories"
     deleted
   end
 

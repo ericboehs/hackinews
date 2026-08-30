@@ -12,6 +12,17 @@ class WorkerTest < Minitest::Test
     assert Item.exists?(1)
   end
 
+  def test_run_prunes_unreachable_items_on_success
+    # Orphan comment: not reachable from any story the worker keeps.
+    create_item id: 901, type: 'comment'
+    Item.hn_client = FakeHnClient.new(top_story_ids: [1], 1 => { 'id' => 1, 'type' => 'story', 'title' => 'Live' })
+
+    capture_log { Worker.run }
+
+    assert Item.exists?(1), 'freshly fetched story should survive'
+    refute Item.exists?(901), 'orphaned comment should be pruned'
+  end
+
   def test_run_raises_when_top_story_ids_unavailable
     client = FakeHnClient.new(top_story_ids: nil)
     Item.hn_client = client
