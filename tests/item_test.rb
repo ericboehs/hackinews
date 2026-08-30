@@ -222,4 +222,127 @@ class ItemTest < Minitest::Test
     item = create_item id: 1, url: 'https://x.com/somebody/status/1'
     assert_equal 'x.com/somebody', item.truncated_url
   end
+
+  def build_tree(root_id: 1, fanout: [4, 3, 2])
+    next_id = 100
+    make = lambda do |levels|
+      return nil if levels.empty?
+
+      Array.new(levels.first) do
+        next_id += 1
+        id = next_id
+        kids = make.call(levels[1..])
+        create_item id: id, type: 'comment', kids: kids
+        id
+      end
+    end
+    create_item id: root_id, kids: make.call(fanout)
+  end
+
+  def test_thread_loads_whole_tree_in_one_query
+    build_tree
+    nodes = Item.count
+
+    index = nil
+    queries = count_queries { index = Item.thread(1) }
+
+    assert_equal 41, nodes
+    assert_equal 1, queries
+    # Prove it really loaded the whole tree, not just the root and its children.
+    assert_equal Item.order(:id).pluck(:id), index.keys.sort
+  end
+
+  # Guards the N+1 that made a 1,420-comment story issue ~1,420 queries.
+  def test_rendering_a_preloaded_thread_issues_no_further_queries
+    build_tree
+    index = Item.thread(1)
+
+    walk = lambda do |item|
+      set = item.comments
+      set&.each { |child| walk.call(child) }
+    end
+
+    queries = count_queries { walk.call(index[1]) }
+
+    assert_equal 0, queries
+  end
+
+  def test_thread_returns_same_comments_as_per_node_lookup
+    build_tree
+    preloaded = Item.thread(1)[1].comments.map(&:id).sort
+    unpreloaded = Item.find(1).comments.map(&:id).sort
+
+    assert_equal unpreloaded, preloaded
+    refute_empty preloaded
+  end
+
+  # A cap would have made deep replies look uncached and, worse, made prune
+  # delete them out of a retained story.
+  def test_thread_loads_arbitrarily_deep_chains
+    depth = 60
+    (2..depth).each { |i| create_item id: i, type: 'comment', kids: (i < depth ? [i + 1] : nil) }
+    create_item id: 1, kids: [2]
+
+    index = Item.thread(1)
+
+    assert_equal depth, index.size
+    assert_includes index.keys, depth
+  end
+
+  def test_thread_terminates_on_a_cycle
+    create_item id: 2, type: 'comment', kids: [1]
+    create_item id: 1, kids: [2]
+
+    index = Item.thread(1)
+
+    assert_equal [1, 2], index.keys.sort
+  end
+
+  def test_prune_deletes_whole_threads_not_just_direct_replies
+    # Old story with a nested reply: the previous implementation deleted the
+    # direct reply but orphaned the grandchild.
+    create_item id: 12, type: 'comment'
+    create_item id: 11, type: 'comment', kids: [12]
+    create_item id: 10, title: 'Old', kids: [11]
+    # Newer story that must survive.
+    create_item id: 21, type: 'comment'
+    create_item id: 20, title: 'New', kids: [21]
+
+    Item.prune [20]
+
+    assert_equal [20, 21], Item.order(:id).pluck(:id)
+  end
+
+  def test_prune_refuses_to_empty_the_table
+    create_item id: 5, type: 'comment'
+
+    assert_equal 0, Item.prune([])
+    assert_equal 0, Item.prune(nil)
+    assert Item.exists?(5)
+  end
+
+  def test_prune_deletes_stories_outside_the_keep_set
+    create_item id: 1, title: 'Dropped'
+    create_item id: 2, title: 'Kept'
+    create_item id: 3, title: 'Kept'
+
+    Item.prune [2, 3]
+
+    assert_equal [2, 3], Item.order(:id).pluck(:id)
+  end
+
+  # prune runs a destructive delete, so deep *retention* matters as much as
+  # deep deletion: a traversal regression would silently drop live replies.
+  def test_prune_keeps_deeply_nested_replies_of_retained_stories
+    create_item id: 104, type: 'comment'
+    create_item id: 103, type: 'comment', kids: [104]
+    create_item id: 102, type: 'comment', kids: [103]
+    create_item id: 101, type: 'comment', kids: [102]
+    create_item id: 100, title: 'Keep', kids: [101]
+    create_item id: 50, title: 'Drop', kids: nil
+
+    Item.prune [100]
+
+    assert_equal [100, 101, 102, 103, 104], Item.order(:id).pluck(:id)
+  end
 end

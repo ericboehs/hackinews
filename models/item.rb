@@ -38,6 +38,32 @@ class Item < ActiveRecord::Base
 
   EXTENDED_TRUNCATION_DOMAINS = %w[github.com twitter.com x.com medium.com].freeze
 
+  # Expanding kids with CROSS JOIN LATERAL rather than `id IN (SELECT
+  # jsonb_array_elements_text(...))` is load-bearing: the IN form plans as a
+  # nested loop over the whole table and is orders of magnitude slower. CYCLE
+  # makes the walk terminate on a cycle in the data without capping depth, so
+  # deep threads are returned in full.
+  THREAD_SQL = <<~SQL
+    WITH RECURSIVE tree AS (
+      SELECT i.id, i.data, i.created_at, i.updated_at FROM items i WHERE i.id = ?
+      UNION ALL
+      SELECT c.id, c.data, c.created_at, c.updated_at
+      FROM tree t
+      CROSS JOIN LATERAL jsonb_array_elements_text(t.data->'kids') AS k(kid)
+      JOIN items c ON c.id = k.kid::bigint
+    ) CYCLE id SET is_cycle USING path
+    SELECT id, data, created_at, updated_at FROM tree
+  SQL
+
+  # Loads a comment tree in one query and points every record at the shared
+  # index, so rendering the thread issues no further queries.
+  def self.thread(root_id)
+    records = find_by_sql [THREAD_SQL, root_id]
+    index = records.index_by(&:id)
+    records.each { |record| record.comment_index = index }
+    index
+  end
+
   def self.top_stories
     ids = hn_client.top_story_ids
     unless ids
@@ -108,10 +134,40 @@ class Item < ActiveRecord::Base
     [item.id, :refreshed]
   end
 
-  def self.remove_old_comments
-    recent_story_ids = Item.stories.last(200).pluck :id
-    old_story_ids = Item.stories.where.not(id: recent_story_ids).pluck :id
-    Item.where("(data->'parent')::numeric IN (?)", old_story_ids).delete_all
+  # The old implementation matched `data->'parent' IN (old story ids)`, which
+  # only ever deleted a story's *direct* replies -- every nested reply beneath
+  # them was orphaned and kept forever. Walking the tree deletes whole threads.
+  # CYCLE rather than a depth cap matters here: a cap would classify deep
+  # descendants of a *retained* story as unreachable and delete them.
+  PRUNE_SQL = <<~SQL
+    WITH RECURSIVE keep AS (
+      SELECT i.id, i.data FROM items i WHERE i.id IN (?)
+      UNION ALL
+      SELECT c.id, c.data
+      FROM keep k
+      CROSS JOIN LATERAL jsonb_array_elements_text(k.data->'kids') AS kk(kid)
+      JOIN items c ON c.id = kk.kid::bigint
+    ) CYCLE id SET is_cycle USING path
+    DELETE FROM items WHERE NOT EXISTS (SELECT 1 FROM keep WHERE keep.id = items.id)
+  SQL
+
+  # Deletes every item not reachable from the given stories. The retained set is
+  # always supplied by the caller -- the worker passes the current top-story
+  # list -- so the cache tracks what the site actually serves and evicts stories
+  # as they rotate off. There is deliberately no default: measured against
+  # production, a "keep the newest N stories" heuristic evicted 80% of the cache
+  # including stories still on the front page, which the worker then refetched.
+  def self.prune(keep_ids)
+    keep_ids = Array(keep_ids).compact
+    # Without this the keep set is empty and the delete would wipe the table.
+    if keep_ids.empty?
+      App.logger.warn 'Prune skipped: no stories to keep'
+      return 0
+    end
+
+    deleted = connection.delete sanitize_sql_array([PRUNE_SQL, keep_ids])
+    App.logger.info "Pruned #{deleted} items outside #{keep_ids.size} retained stories"
+    deleted
   end
 
   def prefetch_children
@@ -171,6 +227,10 @@ class Item < ActiveRecord::Base
     "https://news.ycombinator.com/item?id=#{data['id']}"
   end
 
+  # Set when the record came from .thread, letting #comments resolve children
+  # from memory instead of querying per node.
+  attr_accessor :comment_index
+
   def comments
     if data.nil?
       App.logger.error "Item #{id} has nil data"
@@ -180,7 +240,7 @@ class Item < ActiveRecord::Base
     kids = data['kids']
     return CommentSet.new([], []) if kids.blank?
 
-    loaded = kids.index_with { |kid| Item.find_by id: kid }
+    loaded = kids.index_with { |kid| lookup_child kid }
     missing = loaded.select { |_, rec| rec.nil? }.keys
     App.logger.warn "Item #{id} missing cached comments: #{missing.join(', ')}" if missing.any?
 
@@ -189,5 +249,13 @@ class Item < ActiveRecord::Base
     visible = loaded.values.compact.reject { |rec| rec.hidden? && !rec.replies? }
 
     CommentSet.new(visible, missing)
+  end
+
+  private
+
+  def lookup_child(kid)
+    return comment_index[kid] if comment_index
+
+    Item.find_by id: kid
   end
 end

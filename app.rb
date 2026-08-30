@@ -55,10 +55,29 @@ class App < Sinatra::Base
     erb :index
   end
 
+  # id is an int4 column, so anything outside its range cannot exist and would
+  # otherwise blow up in the adapter rather than 404.
+  STORY_ID_RANGE = (1..2_147_483_647)
+
   get '/stories/:id' do
-    @story = Item.find params[:id]
+    id = Integer(params[:id], exception: false)
+    halt 404 unless id && STORY_ID_RANGE.cover?(id)
+
+    # One query for the whole thread; every record shares the index, so
+    # rendering nested replies issues no further queries.
+    @story = Item.thread(id)[id]
+    unless @story
+      @not_found_message = 'Story not found. It may have been pruned from the cache.'
+      halt 404
+    end
+
     @title += " - #{@story.data['title']}"
     erb :story
+  end
+
+  not_found do
+    @title = 'HackiNews - Not Found'
+    erb :not_found
   end
 end
 
