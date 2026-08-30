@@ -3,7 +3,11 @@
     <% comments.each do |comment| %>
       <li class="uk-open" id="<%= comment.data['id'] %>">
         <div class="uk-accordion-title hn-cursor-pointer">
-          <%= comment.data['by'] %>
+          <% if comment.hidden? %>
+            <span class="uk-text-meta">[deleted]</span>
+          <% else %>
+            <%= comment.data['by'] %>
+          <% end %>
           <% comment_time = Time.at(comment.data['time']).utc %>
           <a href="#<%= comment.data['id'] %>" class="uk-text-meta comment" title="<%= comment_time %>">
             <time datetime="<%= comment.data['time'] %>" class="ago"></time>
@@ -12,7 +16,11 @@
 
         <div class="uk-accordion-content">
           <article class="uk-comment">
-            <%= comment.data['text'] %>
+            <% if comment.hidden? %>
+              <span class="uk-text-meta uk-text-italic">Comment removed.</span>
+            <% else %>
+              <%= comment.data['text'] %>
+            <% end %>
           </article>
 
           <% replies = comment.comments %>
