@@ -1,8 +1,12 @@
+\restrict dbmate
+
 -- Dumped from database version 16.15 (Postgres.app)
+-- Dumped by pg_dump version 18.6 (Postgres.app)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -32,7 +36,7 @@ CREATE TABLE public.items (
 --
 
 CREATE TABLE public.schema_migrations (
-    version character varying NOT NULL
+    version character varying(128) NOT NULL
 );
 
 
@@ -53,8 +57,17 @@ ALTER TABLE ONLY public.schema_migrations
 
 
 --
+-- Name: index_items_on_story_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_items_on_story_time ON public.items USING btree (((data -> 'time'::text)) DESC) WHERE ((data ->> 'type'::text) = 'story'::text);
+
+
+--
 -- PostgreSQL database dump complete
 --
+
+\unrestrict dbmate
 
 
 --
@@ -62,4 +75,5 @@ ALTER TABLE ONLY public.schema_migrations
 --
 
 INSERT INTO public.schema_migrations (version) VALUES
-    ('20200229014547');
+    ('20200229014547'),
+    ('20260830030000');

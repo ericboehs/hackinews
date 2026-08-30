@@ -21,22 +21,22 @@
         <tr id="<%= story.data['id'] %>" date="<%= story.data['time'] %>">
           <td class="uk-text-center" colspan=2>
             <div class="" uk-grid>
-              <a href="<%= "/stories/#{story.id}" || story.comments_url %>" class="comments uk-visible@s uk-text-right uk-display-inline-block uk-width-1-2">
+              <a href="/stories/<%= story.id %>" class="comments uk-visible@s uk-text-right uk-display-inline-block uk-width-1-2">
                 <%= story.data['descendants'] %>
               </a>
-              <a href="<%= "/stories/#{story.id}" || story.comments_url %>" class="points uk-text-right uk-display-inline-block uk-width-1-2 uk-margin-right-small <%= 'uk-text-primary' if story.data['score'] > @next_min_score %>">
+              <a href="/stories/<%= story.id %>" class="points uk-text-right uk-display-inline-block uk-width-1-2 uk-margin-right-small <%= 'uk-text-primary' if story.data['score'] > @next_min_score %>">
                 <%= story.data['score'] %>
               </a>
             </div>
           </td>
           <td class="story">
-            <% if story.data['url'] %>
-              <a href="<%= story.data['url'] %>" class="uk-display-block">
-                <%= story.data['title'] %>
-                <span class="uk-text-meta">(<%= story.truncated_url %>)</span>
+            <% if (story_url = safe_url(story.data['url'], item_id: story.id)) %>
+              <a href="<%= story_url %>" class="uk-display-block">
+                <%= h story.data['title'] %>
+                <span class="uk-text-meta">(<%= h story.truncated_url %>)</span>
               </a>
             <% else %>
-              <a href="https://news.ycombinator.com/item?id=<%= story.data['id'] %>"><%= story.data['title'] %></a>
+              <a href="https://news.ycombinator.com/item?id=<%= story.data['id'] %>"><%= h story.data['title'] %></a>
             <% end %>
           </td>
         </tr>

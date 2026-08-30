@@ -41,6 +41,48 @@ class App < Sinatra::Base
     quiet_logs? ? IO::NULL : $stdout
   end
 
+  # HN item text is HTML and is rendered raw by design; this trusts HN's own
+  # sanitization. Any other source would have to be sanitized before render.
+  # Everything else the API gives us is attacker-influenced plain text and must
+  # be escaped.
+  SAFE_URL_SCHEMES = %w[http https].freeze
+
+  helpers do
+    def h(value)
+      Rack::Utils.escape_html value.to_s
+    end
+
+    # Escaping alone does not make an href safe: a javascript: url survives
+    # escaping and still runs on click. Returns nil rather than "" so callers
+    # can fall back to a real link instead of rendering a dead one.
+    def safe_url(value, item_id: nil)
+      return nil if value.blank?
+
+      uri = URI.parse value.to_s
+      return h(uri.to_s) if SAFE_URL_SCHEMES.include?(uri.scheme)
+
+      App.logger.warn "Item #{item_id}: rejected url scheme #{uri.scheme.inspect}"
+      nil
+    rescue URI::Error => e
+      # InvalidComponentError is not a subclass of InvalidURIError, so the whole
+      # URI::Error hierarchy has to be caught or a bad url 500s the page.
+      App.logger.warn "Item #{item_id}: unparseable url (#{e.class})"
+      nil
+    end
+
+    # The cache only changes when the worker writes, and every write bumps
+    # updated_at, so the newest timestamp catches content edits. The id digest
+    # additionally catches membership changes that leave both the count and the
+    # newest timestamp untouched -- a story dropping below the score threshold
+    # while another takes its place. Last-Modified is deliberately not sent:
+    # its one-second granularity makes it a weaker validator than the ETag.
+    def cache_for(records)
+      cache_control :public, :must_revalidate, max_age: 30
+      newest = records.filter_map(&:updated_at).max
+      etag Digest::SHA256.hexdigest("#{newest&.to_f}-#{records.map(&:id).join(',')}")
+    end
+  end
+
   before do
     @title = 'HackiNews'
   end
@@ -50,8 +92,12 @@ class App < Sinatra::Base
     @min_score = (params['min_score'] || 50).to_i
     @next_min_score =
       MIN_SCORES[(MIN_SCORES.index(@min_score) || 0) + 1] || Float::INFINITY
-    @stories = Item.min_score(@min_score).by_time.limit 500
+    # .stories is what lets the partial index apply, and it stops the listing
+    # depending on the accident that comments carry no score key.
+    @stories = Item.stories.min_score(@min_score).by_time.limit 500
     @stories = @stories.title_matches @q if @q
+    @stories = @stories.to_a
+    cache_for @stories
     erb :index
   end
 
@@ -65,12 +111,14 @@ class App < Sinatra::Base
 
     # One query for the whole thread; every record shares the index, so
     # rendering nested replies issues no further queries.
-    @story = Item.thread(id)[id]
+    thread = Item.thread(id)
+    @story = thread[id]
     unless @story
       @not_found_message = 'Story not found. It may have been pruned from the cache.'
       halt 404
     end
 
+    cache_for thread.values
     @title += " - #{@story.data['title']}"
     erb :story
   end

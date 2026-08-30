@@ -6,7 +6,7 @@
           <% if comment.hidden? %>
             <span class="uk-text-meta">[deleted]</span>
           <% else %>
-            <%= comment.data['by'] %>
+            <%= h comment.data['by'] %>
           <% end %>
           <% comment_time = Time.at(comment.data['time']).utc %>
           <a href="#<%= comment.data['id'] %>" class="uk-text-meta comment" title="<%= comment_time %>">
