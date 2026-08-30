@@ -48,21 +48,14 @@
         /* Pure black rather than #222 so OLED pixels switch off entirely. */
         html.hn-dark, html.hn-dark body { background-color: #000 }
 
-        /* Only the points are tinted. Unvisited titles keep UIkit's
-           .uk-light white; visited ones stay grey via `table a:visited`
-           above. #58a6ff measures 8.3:1 on black (WCAG AAA); UIkit's own
-           #1e87f0 only reaches 5.8:1. */
-        .hn-dark .uk-light .points { color: #58a6ff }
-
-        /* .uk-light forces .uk-text-primary to #fff !important, so the
-           high-score variant has to be reclaimed with !important too. */
+        /* Only the high-score highlight is tinted; ordinary points fall back
+           to UIkit's .uk-light white, and to grey once visited via the global
+           `table a:visited`. .uk-light forces .uk-text-primary to #fff
+           !important, so reclaiming it needs !important too. #58a6ff measures
+           8.3:1 on black (WCAG AAA); UIkit's own #1e87f0 only reaches 5.8:1.
+           Like light mode, the highlight ignores visited dimming, because
+           that !important outranks the global visited rule. */
         .hn-dark .uk-light .points.uk-text-primary { color: #58a6ff !important }
-
-        /* Keeps visited points grey: the two rules above are more specific
-           than the global `table a:visited` and would otherwise outrank it,
-           so clicked stories would stop dimming in dark mode only. Declared
-           last so it also beats the equally-specific !important rule. */
-        .hn-dark .uk-light .points:visited { color: #999 !important }
 
         /* #DDD thread borders measure 15:1 on black, louder than the text
            they sit beside. */
