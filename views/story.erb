@@ -1,17 +1,17 @@
 <article class="uk-article">
   <h3>
     <% if @story.data['url'] %>
-      <a href="<%= @story.data['url'] %>" class="uk-display-block">
-        <%= @story.data['title'] %>
-        <span class="uk-text-meta">(<%= @story.truncated_url %>)</span>
+      <a href="<%= safe_url @story.data['url'] %>" class="uk-display-block">
+        <%= h @story.data['title'] %>
+        <span class="uk-text-meta">(<%= h @story.truncated_url %>)</span>
       </a>
     <% else %>
-      <a href="https://news.ycombinator.com/item?id=<%= @story.data['id'] %>"><%= @story.data['title'] %></a>
+      <a href="https://news.ycombinator.com/item?id=<%= @story.data['id'] %>"><%= h @story.data['title'] %></a>
     <% end %>
   </h3>
   <p class="uk-article-meta">
     <%= @story.data['score'] %> points | 
-    by <%= @story.data['by'] %> | 
+    by <%= h @story.data['by'] %> | 
     <a href="<%= @story.comments_url %>"><%= @story.data['descendants'] %> Comments</a>
   </p>
   <p>

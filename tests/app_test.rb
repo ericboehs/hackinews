@@ -234,4 +234,120 @@ class AppTest < Minitest::Test
 
     assert_equal 404, last_response.status
   end
+
+  # --- escaping -------------------------------------------------------------
+
+  def test_story_titles_are_escaped_on_the_homepage
+    create_item id: 1, title: '<script>alert(1)</script>', score: 100
+
+    get '/'
+
+    refute_includes last_response.body, '<script>alert(1)</script>'
+    assert_includes last_response.body, '&lt;script&gt;'
+  end
+
+  def test_story_title_and_author_are_escaped_on_the_story_page
+    create_item id: 1, title: '<img src=x onerror=alert(1)>', score: 100, by: '<b>evil</b>'
+
+    get '/stories/1'
+
+    refute_includes last_response.body, '<img src=x onerror=alert(1)>'
+    refute_includes last_response.body, '<b>evil</b>'
+    assert_includes last_response.body, '&lt;img src=x'
+  end
+
+  def test_comment_author_is_escaped
+    create_item id: 2, type: 'comment', by: '<script>x</script>', text: 'hi'
+    create_item id: 1, score: 100, kids: [2]
+
+    get '/stories/1'
+
+    refute_includes last_response.body, '<script>x</script>'
+  end
+
+  # HN comment bodies are HTML and are intentionally rendered raw.
+  def test_comment_html_is_still_rendered
+    create_item id: 2, type: 'comment', text: 'see <a href="https://x.test">this</a>'
+    create_item id: 1, score: 100, kids: [2]
+
+    get '/stories/1'
+
+    assert_includes last_response.body, '<a href="https://x.test">this</a>'
+  end
+
+  def test_javascript_urls_are_not_rendered_as_links
+    create_item id: 1, title: 'Bad', score: 100, url: 'javascript:alert(1)'
+
+    get '/stories/1'
+
+    refute_includes last_response.body, 'javascript:alert(1)'
+  end
+
+  def test_ordinary_urls_still_render
+    create_item id: 1, title: 'Good', score: 100, url: 'https://example.test/a?b=1&c=2'
+
+    get '/stories/1'
+
+    assert_includes last_response.body, 'https://example.test/a?b=1&amp;c=2'
+  end
+
+  # --- caching --------------------------------------------------------------
+
+  def test_homepage_sends_cache_validators
+    create_item id: 1, title: 'A', score: 100
+
+    get '/'
+
+    assert last_response.headers['ETag'], 'expected an ETag'
+    assert last_response.headers['Last-Modified'], 'expected Last-Modified'
+    assert_includes last_response.headers['Cache-Control'], 'public'
+  end
+
+  def test_homepage_returns_304_when_unchanged
+    create_item id: 1, title: 'A', score: 100
+    get '/'
+    etag = last_response.headers['ETag']
+
+    get '/', {}, 'HTTP_IF_NONE_MATCH' => etag
+
+    assert_equal 304, last_response.status
+    assert_empty last_response.body
+  end
+
+  def test_story_returns_304_when_unchanged
+    create_item id: 2, type: 'comment', text: 'hi'
+    create_item id: 1, score: 100, kids: [2]
+    get '/stories/1'
+    etag = last_response.headers['ETag']
+
+    get '/stories/1', {}, 'HTTP_IF_NONE_MATCH' => etag
+
+    assert_equal 304, last_response.status
+  end
+
+  def test_etag_changes_when_a_comment_is_added
+    create_item id: 1, score: 100
+    get '/stories/1'
+    before = last_response.headers['ETag']
+
+    create_item id: 2, type: 'comment', text: 'new'
+    Item.find(1).update! data: Item.find(1).data.merge('kids' => [2])
+    get '/stories/1'
+
+    refute_equal before, last_response.headers['ETag']
+    assert_equal 200, last_response.status
+  end
+
+  # --- listing scope --------------------------------------------------------
+
+  # The listing used to rely on comments never carrying a score key.
+  def test_homepage_lists_only_stories
+    create_item id: 1, title: 'Real story', score: 100
+    create_item id: 2, type: 'comment', text: 'not a story', score: 500
+
+    get '/'
+
+    assert_includes last_response.body, 'Real story'
+    refute_includes last_response.body, 'not a story'
+  end
 end

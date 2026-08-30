@@ -31,10 +31,12 @@ end
 module ItemFactory
   def create_item(id:, title: 'Hello', score: 100, type: 'story', kids: nil,
                   updated_at: Time.now.utc, url: nil, time: Time.now.to_i,
-                  deleted: false, dead: false)
+                  deleted: false, dead: false, by: nil, text: nil)
     data = { 'id' => id, 'title' => title, 'score' => score, 'type' => type, 'time' => time }
     data['kids'] = kids if kids
     data['url'] = url if url
+    data['by'] = by if by
+    data['text'] = text if text
     data['deleted'] = true if deleted
     data['dead'] = true if dead
     Item.create!(id: id, data: data, created_at: updated_at, updated_at: updated_at)
