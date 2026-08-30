@@ -48,13 +48,31 @@
         /* Pure black rather than #222 so OLED pixels switch off entirely. */
         html.hn-dark, html.hn-dark body { background-color: #000 }
 
-        /* Only the high-score highlight is tinted; ordinary points fall back
-           to UIkit's .uk-light white, and to grey once visited via the global
-           `table a:visited`. .uk-light forces .uk-text-primary to #fff
-           !important, so reclaiming it needs !important too. #58a6ff measures
-           8.3:1 on black (WCAG AAA); UIkit's own #1e87f0 only reaches 5.8:1.
-           Like light mode, the highlight ignores visited dimming, because
-           that !important outranks the global visited rule. */
+        /* Pure white on pure black is 21:1 and glares on OLED. Material's
+           high-emphasis level for dark themes is 87% white, which drops that
+           to 15.6:1 while staying clearly above the muted body text UIkit
+           already applies (~10:1) and the visited grey (7.4:1). Headings and
+           the comment header are listed separately because .uk-light colours
+           them on their own; the accordion title is a div, so the anchor rule
+           does not reach it. */
+        .hn-dark .uk-light a,
+        .hn-dark .uk-light h1,
+        .hn-dark .uk-light h2,
+        .hn-dark .uk-light h3,
+        .hn-dark .uk-light .uk-accordion-title { color: #dedede }
+
+        /* The rule above is more specific than the global `table a:visited`,
+           so visited dimming has to be reinstated or clicked stories stop
+           greying out in dark mode only. */
+        .hn-dark .uk-light table a:visited { color: #999 }
+
+        /* Only the high-score highlight is tinted; ordinary points take the
+           off-white above, and grey once visited. .uk-light forces
+           .uk-text-primary to #fff !important, so reclaiming it needs
+           !important too. #58a6ff measures 8.3:1 on black (WCAG AAA);
+           UIkit's own #1e87f0 only reaches 5.8:1. Like light mode, the
+           highlight ignores visited dimming, because that !important
+           outranks the global visited rule. */
         .hn-dark .uk-light .points.uk-text-primary { color: #58a6ff !important }
 
         /* #DDD thread borders measure 15:1 on black, louder than the text
