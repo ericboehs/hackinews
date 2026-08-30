@@ -167,11 +167,78 @@ class ItemTest < Minitest::Test
     )
     Item.hn_client = client
 
-    refreshed = capture_log { Item.sync_updates }
-    assert_equal 1, Item.count
+    refreshed = nil
+    capture_log { refreshed = Item.sync_updates }
 
+    assert_equal 1, refreshed
+    assert_equal 1, Item.count
     assert_equal 'New', Item.find(1).data['title']
     refute_includes client.calls, 999
+  end
+
+  def test_sync_updates_keeps_cached_data_when_an_item_fetch_fails
+    create_item id: 1, title: 'Old'
+    Item.hn_client = FakeHnClient.new(updated_item_ids: [1], 1 => nil)
+
+    refreshed = nil
+    log = capture_log { refreshed = Item.sync_updates }
+
+    assert_equal 0, refreshed
+    assert_equal 'Old', Item.find(1).data['title']
+    assert_match(/Updates refresh failed for: 1/, log)
+  end
+
+  # The updates feed can miss changes, so every cached row must eventually be
+  # re-checked on its own.
+  def test_reconcile_refreshes_least_recently_updated_first
+    create_item id: 1, title: 'Stalest', updated_at: 3.hours.ago
+    create_item id: 2, title: 'Stale', updated_at: 2.hours.ago
+    create_item id: 3, title: 'Recent', updated_at: 1.minute.ago
+    client = FakeHnClient.new(
+      1 => { 'id' => 1, 'type' => 'story', 'title' => 'Fresh 1' },
+      2 => { 'id' => 2, 'type' => 'story', 'title' => 'Fresh 2' }
+    )
+    Item.hn_client = client
+
+    refreshed = nil
+    capture_log { refreshed = Item.reconcile(limit: 2) }
+
+    assert_equal 2, refreshed
+    assert_equal [1, 2], client.calls.sort
+    assert_equal 'Recent', Item.find(3).data['title']
+  end
+
+  def test_reconcile_with_an_empty_cache_makes_no_requests
+    client = FakeHnClient.new
+    Item.hn_client = client
+
+    assert_equal 0, Item.reconcile
+    assert_empty client.calls
+  end
+
+  def test_backfill_terminates_on_a_cycle
+    create_item id: 1, kids: [2]
+    create_item id: 2, type: 'comment', kids: [1, 3]
+    client = FakeHnClient.new(3 => { 'id' => 3, 'type' => 'comment' })
+    Item.hn_client = client
+
+    assert_equal 1, Item.backfill([1])
+    assert_equal [3], client.calls
+  end
+
+  def test_backfill_respects_an_explicit_round_cap
+    create_item id: 1, kids: [2]
+    client = FakeHnClient.new(
+      2 => { 'id' => 2, 'type' => 'comment', 'kids' => [3] },
+      3 => { 'id' => 3, 'type' => 'comment', 'kids' => [4] },
+      4 => { 'id' => 4, 'type' => 'comment' }
+    )
+    Item.hn_client = client
+
+    log = capture_log { Item.backfill([1], max_rounds: 2) }
+
+    assert_equal [2, 3], client.calls
+    assert_match(/hit its 2-round cap/, log)
   end
 
   def test_sync_updates_returns_nil_when_feed_unavailable

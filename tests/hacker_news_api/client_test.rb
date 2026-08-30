@@ -30,6 +30,30 @@ module HackerNewsApi
       end
     end
 
+    # Guards the response shape: updates.json returns an object, not an array,
+    # so returning the whole payload would break `where(id: ids)`.
+    def test_updated_item_ids_extracts_the_items_key
+      body = '{"items":[1,2,3],"profiles":["pg"]}'
+      stub_http(response(code: '200', body: body)) do
+        assert_equal [1, 2, 3], client.updated_item_ids
+      end
+    end
+
+    def test_updated_item_ids_returns_nil_on_failure
+      stub_http(response(code: '500', body: 'nope')) do
+        assert_nil client.updated_item_ids
+      end
+    end
+
+    def test_updated_item_ids_requests_the_updates_endpoint
+      requested = nil
+      client.stub :get, ->(url) { requested = url } do
+        client.updated_item_ids
+      end
+
+      assert_match(%r{/v0/updates\.json\z}, requested)
+    end
+
     def test_item_parses_json
       stub_http(response(code: '200', body: '{"id":42,"score":10}')) do
         assert_equal({ 'id' => 42, 'score' => 10 }, client.item(42))

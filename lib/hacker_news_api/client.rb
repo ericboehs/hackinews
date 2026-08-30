@@ -38,9 +38,9 @@ module HackerNewsApi
       get "#{base_url}/topstories.json"
     end
 
-    # Item ids HN reports as changed since its last publish. Polling this is what
-    # lets the worker refresh only what moved instead of re-walking every
-    # cached thread looking for changes.
+    # Item ids in HN's current updates response. This is a snapshot of what
+    # changed recently, not a replayable cursor: ids drop off as new ones
+    # arrive, so a slow poller can miss changes entirely.
     def updated_item_ids
       payload = get "#{base_url}/updates.json"
       return nil unless payload

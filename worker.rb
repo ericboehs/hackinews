@@ -30,9 +30,12 @@ class Worker
       App.logger.info "Done fetching top stories (#{fetched.size})"
     end
 
-    # Refresh what HN says changed, then pull in comments we do not have yet.
-    # Together these replace the old full re-walk of every cached thread.
+    # Refresh what HN says changed, then re-check a slice of the cache the feed
+    # may have missed, then pull in comments we still do not have. Discovering a
+    # new reply depends on its parent's kids list being current, which is why
+    # both refresh passes run before backfill.
     Item.sync_updates
+    Item.reconcile
 
     story_ids = fetched.pluck :id
     added = Item.backfill story_ids

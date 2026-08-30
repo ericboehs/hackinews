@@ -109,9 +109,10 @@ class Item < ActiveRecord::Base
 
   # Every uncached child referenced anywhere in the cached trees, found in one
   # query for all roots at once. This replaces walking the tree in Ruby: the old
-  # worker called prefetch on all ~47,000 cached nodes every cycle just to
-  # discover the handful that were new. Measured on production, one batched
-  # query covers every story in ~1.7s where per-story queries cost ~135ms each.
+  # worker called prefetch on every cached node each cycle just to discover the
+  # handful that were new. Batching all roots into a single query rather than
+  # one query per story is a large measured saving. Traversal starts only from
+  # roots that are already cached; ids not in the table discover nothing.
   MISSING_DESCENDANTS_SQL = <<~SQL
     WITH RECURSIVE tree AS (
       SELECT i.id, i.data FROM items i WHERE i.id IN (?)
@@ -136,22 +137,29 @@ class Item < ActiveRecord::Base
 
   # Fetches only the descendants we do not already have. Each round can reveal
   # another level (a newly fetched comment brings its own kids), so it repeats
-  # until nothing new arrives. Rounds are capped so a thread that keeps failing
-  # to fetch cannot spin.
+  # until nothing new arrives. A round that inserts nothing stops immediate
+  # retries of unavailable ids; max_rounds bounds how deep one pass will chase
+  # newly revealed levels when inserts keep succeeding.
   def self.backfill(root_ids, max_rounds: 25)
     fetched = 0
+    settled = false
 
     max_rounds.times do
       missing = missing_descendant_ids root_ids
-      break if missing.empty?
+      if missing.empty?
+        settled = true
+        break
+      end
 
       gained = missing.count { |id| store_missing id }
       fetched += gained
-      # Every id in this round failed or returned null (deleted items stay
-      # uncacheable), so another round would repeat the same requests.
-      break if gained.zero?
+      if gained.zero?
+        settled = true
+        break
+      end
     end
 
+    App.logger.warn "Backfill hit its #{max_rounds}-round cap; descendants remain uncached" unless settled
     fetched
   end
 
@@ -170,13 +178,38 @@ class Item < ActiveRecord::Base
   def self.sync_updates
     ids = hn_client.updated_item_ids
     if ids.nil?
-      App.logger.warn 'Updates feed unavailable; skipping refresh'
+      # Not fatal: the reconcile sweep below is the safety net, so a failed poll
+      # delays convergence rather than breaking it.
+      App.logger.error 'Updates feed unavailable; relying on reconcile sweep'
       return nil
     end
 
     known = where(id: ids).pluck(:id)
-    refreshed = known.count { |id| refresh id }
-    App.logger.info "Updates feed: #{ids.size} changed, #{known.size} cached, #{refreshed} refreshed"
+    failed = known.reject { |id| refresh id }
+    App.logger.warn "Updates refresh failed for: #{failed.join(', ')}" if failed.any?
+    App.logger.info "Updates feed: #{ids.size} changed, #{known.size} cached, #{known.size - failed.size} refreshed"
+    known.size - failed.size
+  end
+
+  # How many least-recently-updated items each cycle re-checks. Tunable so the
+  # sweep can be traded against convergence time without a deploy.
+  def self.reconcile_batch
+    Integer ENV.fetch('RECONCILE_BATCH', '500')
+  end
+
+  # The updates feed is a snapshot of what changed at poll time, not a cursor we
+  # can replay. An update published between polls is gone before we see it, and
+  # because discovery reads our own cached kids list, a reply we never learned
+  # about can never be found. This sweep re-fetches the least recently updated
+  # items so every cached row is eventually re-checked no matter what the feed
+  # missed, at a cost per cycle that is fixed rather than proportional to the
+  # size of the cache.
+  def self.reconcile(limit: reconcile_batch)
+    ids = order(:updated_at).limit(limit).pluck(:id)
+    return 0 if ids.empty?
+
+    refreshed = ids.count { |id| refresh id }
+    App.logger.info "Reconciled #{refreshed}/#{ids.size} least recently updated items"
     refreshed
   end
 
