@@ -107,19 +107,132 @@ class Item < ActiveRecord::Base
     where "(data->>'title') ilike ?", "%#{search}%"
   end
 
+  # Every uncached child referenced anywhere in the cached trees, found in one
+  # query for all roots at once. This replaces walking the tree in Ruby: the old
+  # worker called prefetch on every cached node each cycle just to discover the
+  # handful that were new. Batching all roots into a single query rather than
+  # one query per story is a large measured saving. Traversal starts only from
+  # roots that are already cached; ids not in the table discover nothing.
+  MISSING_DESCENDANTS_SQL = <<~SQL
+    WITH RECURSIVE tree AS (
+      SELECT i.id, i.data FROM items i WHERE i.id IN (?)
+      UNION ALL
+      SELECT c.id, c.data
+      FROM tree t
+      CROSS JOIN LATERAL jsonb_array_elements_text(t.data->'kids') AS k(kid)
+      JOIN items c ON c.id = k.kid::bigint
+    ) CYCLE id SET is_cycle USING path
+    SELECT DISTINCT k.kid::bigint AS id
+    FROM tree t
+    CROSS JOIN LATERAL jsonb_array_elements_text(t.data->'kids') AS k(kid)
+    WHERE NOT EXISTS (SELECT 1 FROM items i WHERE i.id = k.kid::bigint)
+  SQL
+
+  def self.missing_descendant_ids(root_ids)
+    root_ids = Array(root_ids).compact
+    return [] if root_ids.empty?
+
+    connection.select_values(sanitize_sql_array([MISSING_DESCENDANTS_SQL, root_ids])).map(&:to_i)
+  end
+
+  # Fetches only the descendants we do not already have. Each round can reveal
+  # another level (a newly fetched comment brings its own kids), so it repeats
+  # until nothing new arrives. A round that inserts nothing stops immediate
+  # retries of unavailable ids; max_rounds bounds how deep one pass will chase
+  # newly revealed levels when inserts keep succeeding.
+  def self.backfill(root_ids, max_rounds: 25)
+    fetched = 0
+    settled = false
+
+    max_rounds.times do
+      missing = missing_descendant_ids root_ids
+      if missing.empty?
+        settled = true
+        break
+      end
+
+      gained = missing.count { |id| store_missing id }
+      fetched += gained
+      if gained.zero?
+        settled = true
+        break
+      end
+    end
+
+    App.logger.warn "Backfill hit its #{max_rounds}-round cap; descendants remain uncached" unless settled
+    fetched
+  end
+
+  def self.store_missing(id)
+    payload = hn_client.item id
+    return false unless payload
+
+    create! id: id, data: payload
+    true
+  rescue ActiveRecord::RecordNotUnique
+    false
+  end
+
+  # Refreshes the items HN says changed, limited to ones we already cache.
+  # The updates feed covers all of HN, so most ids are irrelevant to us.
+  def self.sync_updates
+    ids = hn_client.updated_item_ids
+    if ids.nil?
+      # Not fatal: the reconcile sweep below is the safety net, so a failed poll
+      # delays convergence rather than breaking it.
+      App.logger.error 'Updates feed unavailable; relying on reconcile sweep'
+      return nil
+    end
+
+    known = where(id: ids).pluck(:id)
+    failed = known.reject { |id| refresh id }
+    App.logger.warn "Updates refresh failed for: #{failed.join(', ')}" if failed.any?
+    App.logger.info "Updates feed: #{ids.size} changed, #{known.size} cached, #{known.size - failed.size} refreshed"
+    known.size - failed.size
+  end
+
+  # How many least-recently-updated items each cycle re-checks. Tunable so the
+  # sweep can be traded against convergence time without a deploy.
+  def self.reconcile_batch
+    Integer ENV.fetch('RECONCILE_BATCH', '500')
+  end
+
+  # The updates feed is a snapshot of what changed at poll time, not a cursor we
+  # can replay. An update published between polls is gone before we see it, and
+  # because discovery reads our own cached kids list, a reply we never learned
+  # about can never be found. This sweep re-fetches the least recently updated
+  # items so every cached row is eventually re-checked no matter what the feed
+  # missed, at a cost per cycle that is fixed rather than proportional to the
+  # size of the cache.
+  def self.reconcile(limit: reconcile_batch)
+    ids = order(:updated_at).limit(limit).pluck(:id)
+    return 0 if ids.empty?
+
+    refreshed = ids.count { |id| refresh id }
+    App.logger.info "Reconciled #{refreshed}/#{ids.size} least recently updated items"
+    refreshed
+  end
+
+  def self.refresh(id)
+    item = find_by id: id
+    return false unless item
+
+    payload = hn_client.item id
+    return false unless payload
+
+    item.update! data: payload, updated_at: Time.now.utc
+    true
+  end
+
   def self.prefetch(id)
     item = Item.find_by id: id
 
-    if item && item.updated_at > 10.minutes.ago
-      item.prefetch_children
-      return [id, :fresh]
-    end
+    return [id, :fresh] if item && item.updated_at > 10.minutes.ago
 
     payload = hn_client.item id
     unless payload
       if item
         App.logger.warn "Using stale cache for item #{id}; fetch failed"
-        item.prefetch_children
         return [id, :stale]
       end
       return [nil, :missing]
@@ -130,7 +243,6 @@ class Item < ActiveRecord::Base
     else
       item = Item.create!(id: id, data: payload)
     end
-    item.prefetch_children
     [item.id, :refreshed]
   end
 
@@ -168,16 +280,6 @@ class Item < ActiveRecord::Base
     deleted = connection.delete sanitize_sql_array([PRUNE_SQL, keep_ids])
     App.logger.info "Pruned #{deleted} items outside #{keep_ids.size} retained stories"
     deleted
-  end
-
-  def prefetch_children
-    if data.nil?
-      App.logger.error "Item #{id} has nil data; skipping children"
-      return
-    end
-    return unless data['kids']
-
-    data['kids'].each { |kid| Item.prefetch kid }
   end
 
   def truncated_url

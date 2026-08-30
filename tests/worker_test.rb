@@ -96,4 +96,66 @@ class WorkerTest < Minitest::Test
   ensure
     ENV.delete 'WORKER_INTERVAL'
   end
+
+  # The old worker called prefetch on every cached node each cycle, so a fully
+  # cached, unchanged tree cost one API request per comment. Cost is now set by
+  # the reconcile budget, not by how much is cached.
+  def test_steady_state_cycle_cost_is_bounded_by_the_reconcile_budget
+    story = { 'id' => 1, 'type' => 'story', 'title' => 'S', 'kids' => (2..61).to_a }
+    create_item id: 1, kids: (2..61).to_a, updated_at: 1.minute.ago
+    (2..61).each { |i| create_item id: i, type: 'comment', updated_at: 1.minute.ago }
+
+    client = FakeHnClient.new(top_story_ids: [1], updated_item_ids: [], 1 => story, default: nil)
+    Item.hn_client = client
+
+    with_env 'RECONCILE_BATCH' => '5' do
+      capture_log { Worker.run }
+    end
+
+    assert_equal 60, Item.where.not(id: 1).count
+    # 5 from the sweep, and nothing proportional to the 60 cached comments.
+    assert_equal 5, client.calls.grep(Integer).size
+  end
+
+  def test_cycle_fetches_only_genuinely_new_comments
+    create_item id: 1, kids: [2, 3], updated_at: 1.minute.ago
+    create_item id: 2, type: 'comment', updated_at: 1.minute.ago
+
+    client = FakeHnClient.new(
+      top_story_ids: [1],
+      updated_item_ids: [],
+      3 => { 'id' => 3, 'type' => 'comment', 'text' => 'new' }
+    )
+    Item.hn_client = client
+
+    with_env 'RECONCILE_BATCH' => '0' do
+      capture_log { Worker.run }
+    end
+
+    assert_equal [3], client.calls.grep(Integer)
+    assert Item.exists?(3)
+  end
+
+  # The gap the reconcile sweep exists to close, end to end: HN reports a
+  # cached comment as changed, its refreshed kids list reveals a new reply,
+  # and backfill must pull that reply in during the same cycle.
+  def test_updated_comment_reveals_and_backfills_a_new_reply
+    create_item id: 1, kids: [2], updated_at: 1.minute.ago
+    create_item id: 2, type: 'comment', updated_at: 1.minute.ago
+
+    client = FakeHnClient.new(
+      top_story_ids: [1],
+      updated_item_ids: [2],
+      2 => { 'id' => 2, 'type' => 'comment', 'kids' => [3] },
+      3 => { 'id' => 3, 'type' => 'comment', 'text' => 'the new reply' }
+    )
+    Item.hn_client = client
+
+    with_env 'RECONCILE_BATCH' => '0' do
+      capture_log { Worker.run }
+    end
+
+    assert Item.exists?(3), 'new reply should be discovered via the updated parent'
+    assert_equal 'the new reply', Item.find(3).data['text']
+  end
 end

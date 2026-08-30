@@ -30,7 +30,18 @@ class Worker
       App.logger.info "Done fetching top stories (#{fetched.size})"
     end
 
-    Item.prune fetched
+    # Refresh what HN says changed, then re-check a slice of the cache the feed
+    # may have missed, then pull in comments we still do not have. Discovering a
+    # new reply depends on its parent's kids list being current, which is why
+    # both refresh passes run before backfill.
+    Item.sync_updates
+    Item.reconcile
+
+    story_ids = fetched.pluck :id
+    added = Item.backfill story_ids
+    App.logger.info "Backfilled #{added} new comments"
+
+    Item.prune story_ids
   end
 
   def self.start

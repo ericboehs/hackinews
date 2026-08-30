@@ -38,6 +38,16 @@ module HackerNewsApi
       get "#{base_url}/topstories.json"
     end
 
+    # Item ids in HN's current updates response. This is a snapshot of what
+    # changed recently, not a replayable cursor: ids drop off as new ones
+    # arrive, so a slow poller can miss changes entirely.
+    def updated_item_ids
+      payload = get "#{base_url}/updates.json"
+      return nil unless payload
+
+      payload['items']
+    end
+
     def best_story_ids
       get "#{base_url}/beststories.json"
     end
