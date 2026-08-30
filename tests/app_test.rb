@@ -318,6 +318,20 @@ class AppTest < Minitest::Test
 
   # --- caching --------------------------------------------------------------
 
+  # The dark palette is gated on .hn-dark, which only JS adds. If that gate is
+  # ever removed, dark mode renders #666 text on a black background.
+  def test_dark_mode_styles_are_scoped_so_the_page_survives_without_js
+    create_item id: 1, title: 'A', score: 100
+
+    get '/'
+    body = last_response.body
+
+    assert_includes body, 'prefers-color-scheme: dark'
+    assert_includes body, 'html.hn-dark, html.hn-dark body { background-color: #000 }'
+    # Driven by a media-query listener rather than a timer.
+    assert_includes body, "addEventListener('change', applyScheme)"
+  end
+
   def test_homepage_sends_cache_validators
     create_item id: 1, title: 'A', score: 100
 
