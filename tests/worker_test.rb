@@ -96,4 +96,41 @@ class WorkerTest < Minitest::Test
   ensure
     ENV.delete 'WORKER_INTERVAL'
   end
+
+  # The old worker called prefetch on every cached node each cycle, so a fully
+  # cached, unchanged tree still cost one API request per comment. A steady
+  # state cycle must now cost a bounded number of requests regardless of how
+  # many comments are cached.
+  def test_steady_state_cycle_does_not_touch_every_cached_node
+    story = { 'id' => 1, 'type' => 'story', 'title' => 'S', 'kids' => (2..61).to_a }
+    create_item id: 1, kids: (2..61).to_a, updated_at: 1.minute.ago
+    (2..61).each { |i| create_item id: i, type: 'comment', updated_at: 1.minute.ago }
+
+    client = FakeHnClient.new(top_story_ids: [1], updated_item_ids: [], 1 => story)
+    Item.hn_client = client
+
+    capture_log { Worker.run }
+
+    item_calls = client.calls.grep(Integer)
+
+    assert_equal 60, Item.where.not(id: 1).count
+    assert_empty item_calls, "expected no per-comment requests, got #{item_calls.size}"
+  end
+
+  def test_cycle_fetches_only_genuinely_new_comments
+    create_item id: 1, kids: [2, 3], updated_at: 1.minute.ago
+    create_item id: 2, type: 'comment', updated_at: 1.minute.ago
+
+    client = FakeHnClient.new(
+      top_story_ids: [1],
+      updated_item_ids: [],
+      3 => { 'id' => 3, 'type' => 'comment', 'text' => 'new' }
+    )
+    Item.hn_client = client
+
+    capture_log { Worker.run }
+
+    assert_equal [3], client.calls.grep(Integer)
+    assert Item.exists?(3)
+  end
 end

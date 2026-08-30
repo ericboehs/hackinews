@@ -66,6 +66,11 @@ class FakeHnClient
     @calls << :top_story_ids
     @payloads[:top_story_ids]
   end
+
+  def updated_item_ids
+    @calls << :updated_item_ids
+    @payloads[:updated_item_ids]
+  end
 end
 
 module LogCapture

@@ -43,19 +43,29 @@ class ItemTest < Minitest::Test
     assert_equal 0, Item.count
   end
 
-  def test_one_failed_kid_does_not_abort_siblings
-    create_item id: 1, kids: [2, 3], updated_at: 1.hour.ago
+  def test_backfill_continues_after_a_failed_kid
+    create_item id: 1, kids: [2, 3]
     Item.hn_client = FakeHnClient.new(
-      1 => { 'id' => 1, 'type' => 'story', 'kids' => [2, 3] },
       2 => nil,
       3 => { 'id' => 3, 'type' => 'comment', 'text' => 'ok' }
     )
 
-    Item.prefetch 1
+    capture_log { Item.backfill [1] }
 
     refute Item.exists?(2)
     assert Item.exists?(3)
     assert_equal 'ok', Item.find(3).data['text']
+  end
+
+  def test_backfill_stops_when_a_round_gains_nothing
+    create_item id: 1, kids: [2]
+    client = FakeHnClient.new(2 => nil)
+    Item.hn_client = client
+
+    capture_log { Item.backfill [1] }
+
+    # One attempt, not one per round: a permanently dead id must not spin.
+    assert_equal [2], client.calls
   end
 
   def test_stories_scope
@@ -79,29 +89,98 @@ class ItemTest < Minitest::Test
     assert_equal [2], Item.min_score(200).pluck(:id)
   end
 
-  def test_nil_data_does_not_look_like_missing_kids
-    item = create_item id: 1
-    item.define_singleton_method(:data) { nil }
+  def test_backfill_handles_a_story_with_no_kids
+    create_item id: 1
     client = FakeHnClient.new
     Item.hn_client = client
 
-    item.prefetch_children
-
+    assert_equal 0, Item.backfill([1])
     assert_empty client.calls
   end
 
-  def test_prefetch_walks_children_of_fresh_nodes
+  # Freshness must not gate discovery: a brand new reply under a long-cached
+  # comment still has to be found.
+  def test_backfill_fetches_descendants_under_fresh_parents
     create_item id: 1, kids: [2], updated_at: 1.minute.ago
     create_item id: 2, kids: [3], type: 'comment', updated_at: 1.minute.ago
-    client = FakeHnClient.new(
-      3 => { 'id' => 3, 'type' => 'comment', 'text' => 'grand' }
-    )
+    client = FakeHnClient.new(3 => { 'id' => 3, 'type' => 'comment', 'text' => 'grand' })
     Item.hn_client = client
 
-    Item.prefetch 1
+    Item.backfill [1]
 
     assert Item.exists?(3)
     assert_equal [3], client.calls
+  end
+
+  def test_backfill_walks_newly_revealed_levels
+    create_item id: 1, kids: [2]
+    client = FakeHnClient.new(
+      2 => { 'id' => 2, 'type' => 'comment', 'kids' => [3] },
+      3 => { 'id' => 3, 'type' => 'comment', 'kids' => [4] },
+      4 => { 'id' => 4, 'type' => 'comment', 'text' => 'deep' }
+    )
+    Item.hn_client = client
+
+    Item.backfill [1]
+
+    assert_equal [1, 2, 3, 4], Item.order(:id).pluck(:id)
+    assert_equal [2, 3, 4], client.calls
+  end
+
+  def test_backfill_covers_all_roots_in_one_pass
+    create_item id: 1, kids: [3]
+    create_item id: 2, kids: [4]
+    client = FakeHnClient.new(
+      3 => { 'id' => 3, 'type' => 'comment' },
+      4 => { 'id' => 4, 'type' => 'comment' }
+    )
+    Item.hn_client = client
+
+    assert_equal 2, Item.backfill([1, 2])
+    assert_equal [3, 4], client.calls.sort
+  end
+
+  def test_backfill_with_no_roots_makes_no_requests
+    client = FakeHnClient.new
+    Item.hn_client = client
+
+    assert_equal 0, Item.backfill([])
+    assert_empty client.calls
+  end
+
+  def test_backfill_makes_no_requests_when_nothing_is_missing
+    create_item id: 2, type: 'comment'
+    create_item id: 1, kids: [2]
+    client = FakeHnClient.new
+    Item.hn_client = client
+
+    assert_equal 0, Item.backfill([1])
+    assert_empty client.calls
+  end
+
+  def test_sync_updates_refreshes_only_cached_items
+    create_item id: 1, title: 'Old'
+    client = FakeHnClient.new(
+      updated_item_ids: [1, 999],
+      1 => { 'id' => 1, 'type' => 'story', 'title' => 'New' },
+      999 => { 'id' => 999, 'type' => 'comment' }
+    )
+    Item.hn_client = client
+
+    refreshed = capture_log { Item.sync_updates }
+    assert_equal 1, Item.count
+
+    assert_equal 'New', Item.find(1).data['title']
+    refute_includes client.calls, 999
+  end
+
+  def test_sync_updates_returns_nil_when_feed_unavailable
+    client = FakeHnClient.new(updated_item_ids: nil)
+    Item.hn_client = client
+
+    log = capture_log { assert_nil Item.sync_updates }
+
+    assert_match(/Updates feed unavailable/, log)
   end
 
   def test_top_stories_keeps_successes_and_drops_failures

@@ -38,6 +38,16 @@ module HackerNewsApi
       get "#{base_url}/topstories.json"
     end
 
+    # Item ids HN reports as changed since its last publish. Polling this is what
+    # lets the worker refresh only what moved instead of re-walking every
+    # cached thread looking for changes.
+    def updated_item_ids
+      payload = get "#{base_url}/updates.json"
+      return nil unless payload
+
+      payload['items']
+    end
+
     def best_story_ids
       get "#{base_url}/beststories.json"
     end

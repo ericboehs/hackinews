@@ -30,7 +30,15 @@ class Worker
       App.logger.info "Done fetching top stories (#{fetched.size})"
     end
 
-    Item.prune fetched
+    # Refresh what HN says changed, then pull in comments we do not have yet.
+    # Together these replace the old full re-walk of every cached thread.
+    Item.sync_updates
+
+    story_ids = fetched.pluck :id
+    added = Item.backfill story_ids
+    App.logger.info "Backfilled #{added} new comments"
+
+    Item.prune story_ids
   end
 
   def self.start
