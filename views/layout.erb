@@ -48,14 +48,14 @@
         /* Pure black rather than #222 so OLED pixels switch off entirely. */
         html.hn-dark, html.hn-dark body { background-color: #000 }
 
-        /* .uk-light paints every link #fff, which erases the difference
-           between a story title and ordinary text. #58a6ff measures 8.3:1 on
-           black (WCAG AAA); UIkit's own #1e87f0 only reaches 5.8:1. */
+        /* .uk-light paints every link #fff, leaving a story title nearly
+           indistinguishable from the translucent white body text around it.
+           #58a6ff restores the link affordance and measures 8.3:1 on black
+           (WCAG AAA); UIkit's own #1e87f0 only reaches 5.8:1. */
         .hn-dark .uk-light .story a,
         .hn-dark .uk-light table a { color: #58a6ff }
 
-        /* Visited stories stay dimmed, the way HN does it. This has to follow
-           the rule above: the two selectors have equal specificity. */
+        /* Visited links in the listing stay dimmed, the way HN does it. */
         .hn-dark .uk-light table a:visited { color: #999 }
 
         /* .uk-light also forces .uk-text-primary to #fff !important, which
@@ -71,8 +71,7 @@
 
     <script>
       // In <head> and synchronous so the dark background is set before first
-      // paint; deferring this flashes a white page. Replaces a setInterval
-      // that re-checked the media query twice a second for the life of the tab.
+      // paint; deferring this flashes a white page.
       (function () {
         var query = window.matchMedia('(prefers-color-scheme: dark)')
 
