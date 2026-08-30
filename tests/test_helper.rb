@@ -90,9 +90,26 @@ module EnvHelper
   end
 end
 
+module QueryCounter
+  # Counts real SQL against the database, ignoring cached/schema statements, so
+  # tests can assert that thread rendering stays O(1) queries.
+  def count_queries
+    count = 0
+    sub = ActiveSupport::Notifications.subscribe('sql.active_record') do |_, _, _, _, payload|
+      name = payload[:name].to_s
+      count += 1 unless payload[:cached] || %w[SCHEMA TRANSACTION].include?(name)
+    end
+    yield
+    count
+  ensure
+    ActiveSupport::Notifications.unsubscribe sub
+  end
+end
+
 class Minitest::Test
   include ItemCleanup
   include ItemFactory
   include LogCapture
   include EnvHelper
+  include QueryCounter
 end

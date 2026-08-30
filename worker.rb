@@ -29,6 +29,8 @@ class Worker
     else
       App.logger.info "Done fetching top stories (#{fetched.size})"
     end
+
+    Item.prune
   end
 
   def self.start

@@ -200,4 +200,22 @@ class AppTest < Minitest::Test
       assert_same $stdout, App.log_device
     end
   end
+  def test_unknown_story_returns_404
+    get '/stories/999999999'
+
+    assert_equal 404, last_response.status
+    assert_match(/Story not found/, last_response.body)
+  end
+
+  def test_non_numeric_story_id_returns_404
+    get '/stories/not-an-id'
+
+    assert_equal 404, last_response.status
+  end
+
+  def test_unknown_path_returns_404
+    get '/nope'
+
+    assert_equal 404, last_response.status
+  end
 end

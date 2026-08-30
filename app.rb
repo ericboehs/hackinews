@@ -56,9 +56,21 @@ class App < Sinatra::Base
   end
 
   get '/stories/:id' do
-    @story = Item.find params[:id]
+    id = Integer(params[:id], exception: false)
+    halt 404 unless id
+
+    # One query for the whole thread; every record shares the index, so
+    # rendering nested replies issues no further queries.
+    @story = Item.thread(id)[id]
+    halt 404 unless @story
+
     @title += " - #{@story.data['title']}"
     erb :story
+  end
+
+  not_found do
+    @title = 'HackiNews - Not Found'
+    erb :not_found
   end
 end
 
