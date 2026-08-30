@@ -275,6 +275,22 @@ class AppTest < Minitest::Test
     assert_includes last_response.body, '<a href="https://x.test">this</a>'
   end
 
+  # Structural guard, not a rendering guarantee: the dark palette is gated on
+  # .hn-dark, which only the script adds. If that gate is ever dropped while
+  # the background rule stays, dark mode paints #666 text onto black. Actual
+  # colours are verified out of band with a real browser.
+  def test_dark_palette_is_gated_on_the_scripted_class
+    create_item id: 1, title: 'A', score: 100
+
+    get '/'
+    body = last_response.body
+
+    assert_includes body, 'prefers-color-scheme: dark'
+    assert_includes body, 'hn-dark'
+    refute_match(/@media \(prefers-color-scheme: dark\)\s*\{\s*html\s*\{/, body,
+                 'dark background must not apply without the scripted class')
+  end
+
   def test_javascript_urls_are_not_rendered_as_links
     create_item id: 1, title: 'Bad', score: 100, url: 'javascript:alert(1)'
 

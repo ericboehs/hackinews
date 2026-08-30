@@ -40,10 +40,54 @@
         a { color: #0d0d0d; }
       }
 
+      /* Dark mode is applied by the script in <head>, which adds .hn-dark to
+         <html> and UIkit's .uk-light to <body>. Scoping the dark palette to
+         .hn-dark means that with JS disabled the page stays on the readable
+         light palette rather than dark text on a dark background. */
       @media (prefers-color-scheme: dark) {
-        html { background-color: rgb(34, 34, 34) }
+        /* Pure black rather than #222 so OLED pixels switch off entirely. */
+        html.hn-dark, html.hn-dark body { background-color: #000 }
+
+        /* .uk-light paints every link #fff, leaving a story title nearly
+           indistinguishable from the translucent white body text around it.
+           #58a6ff restores the link affordance and measures 8.3:1 on black
+           (WCAG AAA); UIkit's own #1e87f0 only reaches 5.8:1. */
+        .hn-dark .uk-light .story a,
+        .hn-dark .uk-light table a { color: #58a6ff }
+
+        /* Visited links in the listing stay dimmed, the way HN does it. */
+        .hn-dark .uk-light table a:visited { color: #999 }
+
+        /* .uk-light also forces .uk-text-primary to #fff !important, which
+           loses the high-score highlight completely. */
+        .hn-dark .uk-light .uk-text-primary { color: #58a6ff !important }
+
+        /* #DDD thread borders measure 15:1 on black, louder than the text
+           they sit beside. */
+        .hn-dark .uk-comment-list li { border-left-color: #2a2a2a }
+        .hn-dark .uk-comment-list li:hover { border-left-color: #58a6ff }
       }
     </style>
+
+    <script>
+      // In <head> and synchronous so the dark background is set before first
+      // paint; deferring this flashes a white page.
+      (function () {
+        var query = window.matchMedia('(prefers-color-scheme: dark)')
+
+        function applyScheme () {
+          document.documentElement.classList.toggle('hn-dark', query.matches)
+          if (document.body) document.body.classList.toggle('uk-light', query.matches)
+        }
+
+        applyScheme()
+        document.addEventListener('DOMContentLoaded', applyScheme)
+
+        // Safari below 14 only has the deprecated addListener.
+        if (query.addEventListener) query.addEventListener('change', applyScheme)
+        else if (query.addListener) query.addListener(applyScheme)
+      })()
+    </script>
   </head>
   <body>
     <div class="uk-container uk-container-small uk-margin-bottom">
@@ -52,21 +96,6 @@
       </h1>
 
       <%= yield %>
-
-      <!-- Enable dark mode -->
-      <script>
-        function toggleDarkMode() {
-          if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-            document.body.classList.add('uk-light')
-          } else {
-            document.body.classList.remove('uk-light')
-          }
-        }
-
-        toggleDarkMode()
-
-        setInterval(toggleDarkMode, 500)
-      </script>
 
       <% if ENV['GA_TRACKING_ID'] %>
         <script async src="https://www.googletagmanager.com/gtag/js?id=<%= ENV['GA_TRACKING_ID'] %>"></script>

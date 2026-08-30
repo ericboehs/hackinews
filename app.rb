@@ -9,6 +9,7 @@ require 'dotenv'
 Dotenv.load '.env.local', '.env'
 
 require 'logger'
+require 'digest'
 require 'active_record'
 require './models/item'
 
@@ -47,6 +48,14 @@ class App < Sinatra::Base
   # be escaped.
   SAFE_URL_SCHEMES = %w[http https].freeze
 
+  # Validators are computed from database rows, so a template change alone
+  # would keep serving 304 to anyone holding an older ETag until a story
+  # happened to change -- indefinitely for a settled thread. Folding a digest
+  # of the templates into the key retires those cached copies on deploy.
+  TEMPLATE_VERSION = Digest::SHA256.hexdigest(
+    Dir[File.join(__dir__, 'views', '*.erb')].sort.map { |f| File.read f }.join
+  )[0, 12]
+
   helpers do
     def h(value)
       Rack::Utils.escape_html value.to_s
@@ -79,7 +88,9 @@ class App < Sinatra::Base
     def cache_for(records)
       cache_control :public, :must_revalidate, max_age: 30
       newest = records.filter_map(&:updated_at).max
-      etag Digest::SHA256.hexdigest("#{newest&.to_f}-#{records.map(&:id).join(',')}")
+      etag Digest::SHA256.hexdigest(
+        "#{TEMPLATE_VERSION}-#{newest&.to_f}-#{records.map(&:id).join(',')}"
+      )
     end
   end
 
