@@ -176,6 +176,43 @@ class ItemTest < Minitest::Test
     assert_equal [2], parent.comments.map(&:id)
   end
 
+  def test_hidden_is_true_for_tombstones
+    assert_predicate create_tombstone(id: 1), :hidden?
+    assert_predicate create_tombstone(id: 2, kind: 'dead'), :hidden?
+  end
+
+  def test_hidden_is_false_for_ordinary_and_unsaved_items
+    refute_predicate create_item(id: 1, type: 'comment'), :hidden?
+    refute_predicate Item.new(id: 2), :hidden?
+  end
+
+  def test_comments_drops_childless_tombstones
+    create_tombstone id: 2
+    create_item id: 3, type: 'comment'
+    comments = create_item(id: 1, kids: [2, 3]).comments
+
+    assert_equal [3], comments.map(&:id)
+  end
+
+  # A removed comment is not a cache gap, so it must not inflate missing_ids.
+  def test_dropped_tombstones_are_not_counted_as_missing
+    create_tombstone id: 2
+    comments = create_item(id: 1, kids: [2]).comments
+
+    assert_empty comments.to_a
+    refute_predicate comments, :missing?
+  end
+
+  # Keeping the tombstone preserves the thread; dropping it would orphan replies.
+  def test_comments_keeps_tombstones_that_have_replies
+    create_item id: 3, type: 'comment'
+    create_tombstone id: 2, kids: [3]
+    comments = create_item(id: 1, kids: [2]).comments
+
+    assert_equal [2], comments.map(&:id)
+    assert_equal [3], comments.first.comments.map(&:id)
+  end
+
   def test_truncated_url_returns_host
     item = create_item id: 1, url: 'https://example.com/path?q=1'
     assert_equal 'example.com', item.truncated_url

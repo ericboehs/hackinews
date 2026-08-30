@@ -94,6 +94,78 @@ class AppTest < Minitest::Test
     assert_match(/2\s+comments are\s+not cached yet/, last_response.body)
   end
 
+  def test_story_hides_deleted_comment_shell
+    # Reproduces the empty comment seen in production: HN item 49494172 was
+    # {deleted: true} with no author or text, so it rendered as a bare timestamp.
+    create_tombstone id: 2
+    create_item id: 3, type: 'comment'
+    create_item id: 1, title: 'Has kids', kids: [2, 3], score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    refute_match(/id="2"/, last_response.body)
+    refute_match(/not cached yet/, last_response.body)
+    assert_match(/id="3"/, last_response.body)
+  end
+
+  def test_story_shows_placeholder_for_deleted_comment_with_replies
+    create_item id: 3, type: 'comment'
+    create_tombstone id: 2, kids: [3]
+    create_item id: 1, title: 'Has kids', kids: [2], score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    assert_match(/\[deleted\]/, last_response.body)
+    assert_match(/Comment removed/, last_response.body)
+    assert_match(/id="3"/, last_response.body)
+  end
+
+  # dead items reach the same filter as deleted ones, but unlike deleted they
+  # can still carry text, so a regression would resurrect a visible shell.
+  def test_story_hides_childless_dead_comment
+    create_tombstone id: 2, kind: 'dead'
+    create_item id: 3, type: 'comment'
+    create_item id: 1, title: 'Has kids', kids: [2, 3], score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    refute_match(/id="2"/, last_response.body)
+    assert_match(/id="3"/, last_response.body)
+  end
+
+  def test_story_shows_placeholder_for_dead_comment_with_replies
+    create_item id: 3, type: 'comment'
+    create_tombstone id: 2, kind: 'dead', kids: [3]
+    create_item id: 1, title: 'Has kids', kids: [2], score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    assert_match(/\[deleted\]/, last_response.body)
+    assert_match(/id="3"/, last_response.body)
+  end
+
+  # kids anchors the thread even before replies are cached, so the tombstone
+  # must survive and carry the gap notice rather than vanish.
+  def test_story_keeps_tombstone_whose_reply_is_not_cached
+    create_tombstone id: 2, kids: [3]
+    create_item id: 1, title: 'Has kids', kids: [2], score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    assert_match(/\[deleted\]/, last_response.body)
+    assert_match(/1\s+comment is\s+not cached yet/, last_response.body)
+    assert_match(%r{not cached yet.*?item\?id=2}m, last_response.body)
+  end
+
+  def test_story_with_only_deleted_comments_says_no_comments
+    create_tombstone id: 2
+    create_item id: 1, title: 'All gone', kids: [2], score: 100
+
+    get '/stories/1'
+    assert last_response.ok?
+    assert_match(/No comments/, last_response.body)
+  end
+
   def test_story_with_no_comments_says_so
     create_item id: 1, title: 'Lonely', score: 100
 

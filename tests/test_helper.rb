@@ -30,11 +30,22 @@ end
 
 module ItemFactory
   def create_item(id:, title: 'Hello', score: 100, type: 'story', kids: nil,
-                  updated_at: Time.now.utc, url: nil, time: Time.now.to_i)
+                  updated_at: Time.now.utc, url: nil, time: Time.now.to_i,
+                  deleted: false, dead: false)
     data = { 'id' => id, 'title' => title, 'score' => score, 'type' => type, 'time' => time }
     data['kids'] = kids if kids
     data['url'] = url if url
+    data['deleted'] = true if deleted
+    data['dead'] = true if dead
     Item.create!(id: id, data: data, created_at: updated_at, updated_at: updated_at)
+  end
+
+  # Minimal deleted/dead comment fixture: no author, text, or title, mirroring
+  # what HN returns for a tombstone. Accepts kids so threaded cases can be built.
+  def create_tombstone(id:, kind: 'deleted', kids: nil, time: Time.now.to_i)
+    data = { 'id' => id, 'type' => 'comment', 'time' => time, kind => true }
+    data['kids'] = kids if kids
+    Item.create!(id: id, data: data, created_at: Time.now.utc, updated_at: Time.now.utc)
   end
 end
 

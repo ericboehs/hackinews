@@ -153,6 +153,20 @@ class Item < ActiveRecord::Base
     @hn_client = client
   end
 
+  # HN keeps tombstones for removed comments. Deleted ones carry no author or
+  # text at all, so rendering them yields an empty shell; dead ones are
+  # moderated out of the default view but can still carry text. Whether a
+  # tombstone is shown is decided in #comments, not here.
+  def hidden?
+    return false if data.nil?
+
+    !!(data['deleted'] || data['dead'])
+  end
+
+  def replies?
+    !data.nil? && data['kids'].present?
+  end
+
   def comments_url
     "https://news.ycombinator.com/item?id=#{data['id']}"
   end
@@ -170,6 +184,10 @@ class Item < ActiveRecord::Base
     missing = loaded.select { |_, rec| rec.nil? }.keys
     App.logger.warn "Item #{id} missing cached comments: #{missing.join(', ')}" if missing.any?
 
-    CommentSet.new(loaded.values.compact, missing)
+    # A tombstone with no replies has nothing to show and nothing to anchor, so
+    # drop it. It is removed rather than missing, so it stays out of missing_ids.
+    visible = loaded.values.compact.reject { |rec| rec.hidden? && !rec.replies? }
+
+    CommentSet.new(visible, missing)
   end
 end
