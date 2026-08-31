@@ -17,6 +17,21 @@ require './models/item'
 class App < Sinatra::Base
   MIN_SCORES = [0, 50, 100, 200, 300, 400, 500, 750, 1000].freeze
 
+  # Rendered into the ? cheatsheet. Kept beside the routes rather than in the
+  # templates so each page documents the keys its own script actually binds.
+  LISTING_SHORTCUTS = [
+    [%w[j k], 'Down or up a row, keeping the column'],
+    [%w[h l], 'Previous or next link'],
+    [%w[space], 'Activate the focused filter'],
+    [%w[?], 'This help']
+  ].freeze
+
+  STORY_SHORTCUTS = [
+    [%w[j k], 'Down or up a comment'],
+    [%w[h l], 'Previous or next link'],
+    [%w[?], 'This help']
+  ].freeze
+
   configure :development do
     set :host_authorization, permitted_hosts: []
   end
@@ -99,6 +114,7 @@ class App < Sinatra::Base
   end
 
   get '/' do
+    @shortcuts = LISTING_SHORTCUTS
     @q = params['q']
     @min_score = (params['min_score'] || 50).to_i
     @next_min_score =
@@ -117,6 +133,7 @@ class App < Sinatra::Base
   STORY_ID_RANGE = (1..2_147_483_647)
 
   get '/stories/:id' do
+    @shortcuts = STORY_SHORTCUTS
     id = Integer(params[:id], exception: false)
     halt 404 unless id && STORY_ID_RANGE.cover?(id)
 

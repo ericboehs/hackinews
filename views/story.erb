@@ -89,6 +89,9 @@
   }
 
   document.addEventListener('keydown', function (e) {
+    // Ignore the nav keys while the ? cheatsheet is up, or focus walks the
+    // thread behind the dialog.
+    if (document.querySelector('.uk-modal.uk-open')) return
     if (!['h', 'j', 'k', 'l'].includes(e.key)) return
     if (e.key === 'h') focusPreviousLink()
     if (e.key === 'j') relativelyFocusLink(1)

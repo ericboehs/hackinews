@@ -1,5 +1,5 @@
 <p class="uk-form-label uk-text-center uk-text-meta">Minimum Score</p>
-<ul class="uk-subnav uk-subnav-pill uk-flex-center" uk-margin>
+<ul id="min-score" class="uk-subnav uk-subnav-pill uk-flex-center" uk-margin>
   <% App::MIN_SCORES.each do |score| %>
     <li<%= ' class="uk-active"' if @min_score == score %>>
       <a href="?min_score=<%= score %>"><%= score %></a>
@@ -7,8 +7,21 @@
   <% end %>
 </ul>
 
+<!-- Hidden until the script has confirmed it can keep a baseline, so a
+     visitor without JS or without storage never sees a dead toggle. -->
+<ul id="new-filter" class="uk-subnav uk-subnav-pill uk-flex-center" hidden uk-margin>
+  <li id="new-filter-item">
+    <a href="#" id="new-filter-toggle" aria-pressed="false">New since last visit<span id="new-filter-count"></span></a>
+  </li>
+</ul>
+
+<p id="no-new-stories" class="uk-placeholder uk-text-center" hidden>
+  Nothing new since your last visit.
+  <a href="#" id="show-all-stories">Show all</a>
+</p>
+
 <% if @stories.present? %>
-  <table class="uk-table hn-table-xsmall">
+  <table id="stories" class="uk-table hn-table-xsmall">
     <thead>
       <tr>
         <th class="uk-table-shrink hn-text-xsmall"><span class="uk-visible@s">Comments</span></th>
@@ -55,54 +68,241 @@
 <script>
   var daterowTemplate = document.querySelector('#daterow')
 
-  Array.from(document.querySelectorAll('tr[date]')).forEach(function (el) {
-    var date = new Date(el.getAttribute('date') * 1000)
-    var prettyDate = date.toLocaleDateString(undefined, {
-      weekday: 'short', month: 'short', day: 'numeric'
+  // Rebuilt from the currently visible rows rather than inserted once, because
+  // the "new since last visit" filter hides rows after the fact and would
+  // otherwise strand a divider above stories from a different day, or above
+  // nothing at all.
+  function renderDateRows () {
+    Array.from(document.querySelectorAll('tr.daterow')).forEach(function (el) { el.remove() })
+
+    var lastLabel = null
+    Array.from(document.querySelectorAll('tr[date]')).forEach(function (el) {
+      if (el.hidden) return
+
+      var date = new Date(el.getAttribute('date') * 1000)
+      var label = date.toLocaleDateString(undefined, {
+        weekday: 'short', month: 'short', day: 'numeric'
+      })
+      var isToday = (new Date()).toDateString() === date.toDateString()
+
+      if (label !== lastLabel && !isToday) {
+        var daterow = daterowTemplate.content.cloneNode(true)
+        daterow.querySelector('tr').className = 'daterow'
+        daterow.querySelector('td').textContent = label
+        el.parentNode.insertBefore(daterow, el)
+      }
+      lastLabel = label
     })
-    var daterow = daterowTemplate.content.cloneNode(true)
-    daterow.querySelector('td').textContent = prettyDate
-    var alreadyInserted = Array.from(el.parentNode.children).some(e => daterow.textContent.includes(e.textContent))
-    var isToday = (new Date()).toDateString() === date.toDateString()
-    if (!alreadyInserted && !isToday) el.parentNode.insertBefore(daterow, el)
-  })
+  }
+
+  renderDateRows()
+</script>
+
+<!-- "New since last visit"
+
+     Deliberately client-side. The listing is served with public cache headers
+     and one ETag shared by every visitor, so "what have *I* already seen"
+     cannot live on the server without either sessions or making the page
+     uncacheable. The baseline is the set of story ids from the previous load
+     rather than a posting timestamp: a story is often hours old by the time it
+     crosses the score threshold and appears here, and filtering on when it was
+     posted would hide exactly those arrivals. -->
+<script>
+  (function () {
+    var KEY = 'hn.visit.v1'
+    // A refresh moments after the last one should not wipe the highlight before
+    // it has been read, so the cutoff only advances once the previous view has
+    // been on screen long enough to have been looked at.
+    var GRACE_MS = 5 * 60 * 1000
+    // Stories rotate off the listing; without an expiry the seen map only grows.
+    var TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+    var rows = Array.from(document.querySelectorAll('tr[date]'))
+    if (!rows.length) return
+
+    var store
+    try {
+      // Safari in private mode exposes localStorage but throws on write, so the
+      // probe has to actually write.
+      store = window.localStorage
+      store.setItem(KEY, store.getItem(KEY) || '{}')
+    } catch (e) {
+      return // No storage means no baseline; leave the control hidden.
+    }
+
+    var state
+    try { state = JSON.parse(store.getItem(KEY)) || {} } catch (e) { state = {} }
+
+    var now = Date.now()
+    var seen = state.seen || {}
+    // A first visit has no previous load to compare against: the cutoff is now,
+    // nothing is marked new, and the whole listing becomes the baseline.
+    var cutoff = state.lastVisit && now - state.lastVisit >= GRACE_MS
+      ? state.lastVisit
+      : (state.cutoff || now)
+
+    var newIds = []
+    rows.forEach(function (row) {
+      if (!seen[row.id]) seen[row.id] = now
+      if (seen[row.id] > cutoff) {
+        row.classList.add('hn-new')
+        newIds.push(row.id)
+      }
+    })
+
+    Object.keys(seen).forEach(function (id) {
+      if (now - seen[id] > TTL_MS) delete seen[id]
+    })
+
+    var enabled = !!state.on
+    var nav = document.querySelector('#new-filter')
+    var item = document.querySelector('#new-filter-item')
+    var toggle = document.querySelector('#new-filter-toggle')
+    var count = document.querySelector('#new-filter-count')
+    var table = document.querySelector('#stories')
+    var placeholder = document.querySelector('#no-new-stories')
+
+    function persist () {
+      store.setItem(KEY, JSON.stringify({
+        seen: seen, cutoff: cutoff, lastVisit: now, on: enabled
+      }))
+    }
+
+    function apply () {
+      rows.forEach(function (row) {
+        row.hidden = enabled && !row.classList.contains('hn-new')
+      })
+      renderDateRows()
+      item.classList.toggle('uk-active', enabled)
+      toggle.setAttribute('aria-pressed', enabled ? 'true' : 'false')
+      // An empty table would render as a bare header, so swap in a placeholder
+      // that also offers the way back out of the filter.
+      var blank = enabled && newIds.length === 0
+      table.hidden = blank
+      placeholder.hidden = !blank
+    }
+
+    function setEnabled (value) {
+      return function (e) {
+        e.preventDefault()
+        enabled = value
+        apply()
+        persist()
+      }
+    }
+
+    count.textContent = ' (' + newIds.length + ')'
+    nav.hidden = false
+    apply()
+    // Written after the first render so a load that throws midway does not
+    // consume the baseline and lose the unread stories.
+    persist()
+
+    toggle.addEventListener('click', function (e) { setEnabled(!enabled)(e) })
+    document.querySelector('#show-all-stories').addEventListener('click', setEnabled(false))
+  })()
 </script>
 
 <!-- Keyboard Navigation -->
 <script>
+  // Hidden rows are not focusable, so a filtered-out link would silently eat a
+  // keystroke; every lookup walks the visible links only.
+  function visibleLinks(selector) {
+    return Array.from(document.querySelectorAll(selector)).filter(function (el) {
+      return el.offsetParent !== null
+    })
+  }
+
+  // The controls above the listing, top to bottom. j/k treat each as one more
+  // row above the stories, so the filters are reachable without leaving the
+  // keyboard. Rows that are not on the page drop out instead of swallowing a
+  // keystroke: the new-since filter is absent without storage, and the
+  // placeholder only exists while the filter is hiding everything.
+  function controlRows() {
+    return [
+      visibleLinks('#min-score a'),
+      visibleLinks('#new-filter a'),
+      visibleLinks('#no-new-stories a')
+    ].filter(function (row) { return row.length })
+  }
+
+  function rowIndexOf(rows, el) {
+    for (var i = 0; i < rows.length; i++) if (rows[i].indexOf(el) !== -1) return i
+    return -1
+  }
+
+  // Which column of the listing j/k walks, taken from where focus already is.
+  function storyLinks() {
+    if (document.activeElement.classList.contains('comments')) return visibleLinks('a.comments')
+    if (document.activeElement.classList.contains('points')) return visibleLinks('a.points')
+    return visibleLinks('.story a')
+  }
+
+  // Arriving at a filter lands on the value already in effect, so h/l nudges
+  // from the current score rather than walking up from the far left.
+  function focusRow(row) {
+    if (!row || !row.length) return
+    var active = row.filter(function (el) { return el.parentNode.classList.contains('uk-active') })[0]
+    ;(active || row[0]).focus()
+  }
+
+  function focusRelative(links, offset) {
+    var target = links[links.indexOf(document.activeElement) + offset]
+    if (target) target.focus()
+  }
+
+  // j/k: a row down or up, holding the column inside the listing and stepping
+  // out into the filters once past the first story.
   function relativelyFocusLink(offset) {
-    if (document.activeElement.classList.contains('comments')) {
-      var commentLinks = Array.from(document.querySelectorAll("a.comments"))
-      var currentCommentLink = commentLinks.indexOf(document.activeElement)
-      commentLinks[currentCommentLink + offset].focus()
-    } else if (document.activeElement.classList.contains('points')) {
-      var pointsLinks = Array.from(document.querySelectorAll("a.points"))
-      var currentPointLink = pointsLinks.indexOf(document.activeElement)
-      pointsLinks[currentPointLink + offset].focus()
-    } else {
-      var storyLinks = Array.from(document.querySelectorAll(".story a"))
-      var currentStoryLink = storyLinks.indexOf(document.activeElement)
-      storyLinks[currentStoryLink + offset].focus()
+    var rows = controlRows()
+    var links = storyLinks()
+    var row = rowIndexOf(rows, document.activeElement)
+
+    if (row !== -1) {
+      if (rows[row + offset]) focusRow(rows[row + offset])
+      else if (offset > 0 && links.length) links[0].focus()
+      return
     }
+
+    var index = links.indexOf(document.activeElement)
+    // Nothing focused yet: j enters the listing, k enters the filters.
+    if (index === -1) {
+      if (offset > 0) { if (links.length) links[0].focus() }
+      else focusRow(rows[rows.length - 1])
+      return
+    }
+
+    if (links[index + offset]) links[index + offset].focus()
+    else if (offset < 0) focusRow(rows[rows.length - 1])
   }
 
-  function focusPreviousLink() {
-      var links = Array.from(document.querySelectorAll("a"))
-      var currentLink = links.indexOf(document.activeElement)
-      links[currentLink - 1].focus()
-  }
-
-  function focusNextLink() {
-      var links = Array.from(document.querySelectorAll("a"))
-      var currentLink = links.indexOf(document.activeElement)
-      links[currentLink + 1].focus()
+  // h/l: the previous or next link. Inside a filter row the walk is clamped to
+  // that row, so stepping past the last score pill cannot drop focus into the
+  // page heading or the listing behind it.
+  function focusHorizontally(offset) {
+    var rows = controlRows()
+    var row = rowIndexOf(rows, document.activeElement)
+    focusRelative(row === -1 ? visibleLinks('a') : rows[row], offset)
   }
 
   document.addEventListener('keydown', function (e) {
+    // The cheatsheet is a dialog over the page; walking focus underneath it
+    // would scroll the listing out from behind it.
+    if (document.querySelector('.uk-modal.uk-open')) return
+
+    // Space activates a focused filter the way it would a button; these are
+    // anchors, which answer only to Enter on their own, and the page would
+    // scroll instead.
+    if (e.key === ' ' && rowIndexOf(controlRows(), document.activeElement) !== -1) {
+      e.preventDefault()
+      document.activeElement.click()
+      return
+    }
+
     if (!['h', 'j', 'k', 'l'].includes(e.key)) return
-    if (e.key === 'h') focusPreviousLink()
+    if (e.key === 'h') focusHorizontally(-1)
     if (e.key === 'j') relativelyFocusLink(1)
     if (e.key === 'k') relativelyFocusLink(-1)
-    if (e.key === 'l') focusNextLink()
+    if (e.key === 'l') focusHorizontally(1)
   })
 </script>

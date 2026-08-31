@@ -1,0 +1,39 @@
+<!-- Keyboard cheatsheet, opened with ?.
+
+     The close button carries a literal x rather than UIkit's uk-close: that
+     glyph is an SVG injected by uikit-icons.js, which the layout does not load,
+     so the button would render empty. -->
+<div id="shortcuts" uk-modal>
+  <div class="uk-modal-dialog uk-modal-body uk-margin-auto-vertical">
+    <button class="uk-close uk-modal-close-default" type="button" aria-label="Close">&times;</button>
+    <h3 class="uk-modal-title">Keyboard shortcuts</h3>
+    <table class="uk-table uk-table-small hn-keys">
+      <tbody>
+        <% shortcuts.each do |keys, description| %>
+          <tr>
+            <td class="uk-table-shrink uk-text-nowrap">
+              <% keys.each_with_index do |key, i| %><%= ' / ' if i.positive? %><code><%= h key %></code><% end %>
+            </td>
+            <td><%= h description %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  (function () {
+    // The dialog is UIkit's, so without its JS there is nothing to open; the
+    // page is unstyled at that point anyway.
+    if (!window.UIkit) return
+
+    var dialog = document.querySelector('#shortcuts')
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== '?') return
+      e.preventDefault()
+      UIkit.modal(dialog)[dialog.classList.contains('uk-open') ? 'hide' : 'show']()
+    })
+  })()
+</script>
