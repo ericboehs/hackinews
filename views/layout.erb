@@ -12,6 +12,40 @@
       .hn-text-xsmall { font-size: 0.75em !important }
       .hn-cursor-pointer { cursor: pointer }
 
+      /* Rows the "new since last visit" filter keeps. The rule is paid for out
+         of the cell's own padding so marked titles stay aligned with the rest,
+         and tr[hidden] is spelled out because UIkit's table rules would
+         otherwise outrank the UA stylesheet's [hidden]. */
+      .hn-table-xsmall tr[hidden] { display: none }
+      tr.hn-new td.story { border-left: 3px solid #1e87f0; padding-left: 9px }
+
+      /* UIkit clears the focus ring on links, which leaves the j/k walk through
+         the filters with nothing to show for it -- the score pills would take
+         focus invisibly. Restricted to :focus-visible so clicking a pill does
+         not leave a ring behind. */
+      a:focus-visible,
+      .uk-subnav > * > a:focus-visible { outline: 2px solid #1e87f0; outline-offset: 2px }
+
+      /* Keys in the ? cheatsheet. UIkit paints <code> pink on near-white,
+         which reads as a link here rather than as a key. */
+      .hn-keys code {
+        background: #f8f8f8;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+        padding: 2px 6px;
+        color: inherit;
+      }
+
+      /* UIkit's .uk-close only recolours the control; the browser's own button
+         chrome would still box the glyph. */
+      .uk-modal .uk-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        line-height: 1;
+        cursor: pointer;
+      }
+
       .story a { text-decoration: none; }
       table a:visited { color: #999 }
 
@@ -79,6 +113,17 @@
            they sit beside. */
         .hn-dark .uk-comment-list li { border-left-color: #2a2a2a }
         .hn-dark .uk-comment-list li:hover { border-left-color: #58a6ff }
+
+        /* Same AAA blue as the high-score highlight; UIkit's #1e87f0 is dimmer
+           than the off-white text next to it on black. */
+        .hn-dark tr.hn-new td.story { border-left-color: #58a6ff }
+        .hn-dark a:focus-visible,
+        .hn-dark .uk-subnav > * > a:focus-visible { outline-color: #58a6ff }
+
+        /* The dialog keeps UIkit's white background otherwise, which .uk-light
+           then writes white text onto. */
+        .hn-dark .uk-modal-dialog { background-color: #111 }
+        .hn-dark .hn-keys code { background: #1a1a1a; border-color: #333 }
       }
     </style>
 
@@ -109,6 +154,10 @@
       </h1>
 
       <%= yield %>
+
+      <% if @shortcuts %>
+        <%= erb :_shortcuts, layout: false, locals: { shortcuts: @shortcuts } %>
+      <% end %>
 
       <% if ENV['GA_TRACKING_ID'] %>
         <script async src="https://www.googletagmanager.com/gtag/js?id=<%= ENV['GA_TRACKING_ID'] %>"></script>

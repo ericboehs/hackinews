@@ -415,6 +415,110 @@ class AppTest < Minitest::Test
     assert_equal 200, last_response.status, 'membership changed, must not 304'
   end
 
+  # --- new since last visit -------------------------------------------------
+
+  # The filter runs in the browser because the listing is cached publicly under
+  # one ETag for everyone; the server only ships the control. It must arrive
+  # hidden so a visitor without JS -- or without writable storage, where the
+  # script bails -- never sees a toggle that does nothing.
+  def test_new_since_last_visit_control_is_hidden_until_scripted
+    create_item id: 1, title: 'A', score: 100
+
+    get '/'
+    body = last_response.body
+
+    assert_includes body, 'New since last visit'
+    assert_match(/<ul id="new-filter"[^>]*\shidden/, body)
+    assert_match(/<p id="no-new-stories"[^>]*\shidden/, body)
+  end
+
+  # The baseline is a set of story ids, not a timestamp: a story is often hours
+  # old by the time its score lifts it into the listing. That only works while
+  # every row carries its id.
+  def test_listing_rows_carry_story_ids_for_the_new_filter
+    create_item id: 42, title: 'A', score: 100
+
+    get '/'
+
+    assert_match(/<tr id="42"/, last_response.body)
+  end
+
+  # Hiding rows can strand a date divider above a different day, so the
+  # dividers are rebuilt from the visible rows on every filter change rather
+  # than inserted once at load.
+  def test_date_dividers_are_rebuilt_rather_than_inserted_once
+    create_item id: 1, title: 'A', score: 100
+
+    get '/'
+
+    assert_includes last_response.body, 'function renderDateRows'
+    assert_match(/renderDateRows\(\)/, last_response.body)
+  end
+
+  # --- keyboard navigation --------------------------------------------------
+
+  # j/k step up out of the listing into the filters, which the script finds by
+  # id. Renaming or dropping either container silently strands the walk at the
+  # first story, so the hooks are pinned here.
+  def test_filter_rows_expose_the_ids_keyboard_nav_walks
+    create_item id: 1, title: 'A', score: 100
+
+    get '/'
+    body = last_response.body
+
+    assert_includes body, '<ul id="min-score"'
+    assert_includes body, '<ul id="new-filter"'
+    assert_match(/visibleLinks\('#min-score a'\)/, body)
+    assert_match(/visibleLinks\('#new-filter a'\)/, body)
+  end
+
+  # The score pills are anchors, which answer to Enter but not Space, and UIkit
+  # strips their focus ring; both are patched over so the filters are usable
+  # from the keyboard alone.
+  def test_filters_are_operable_and_visible_from_the_keyboard
+    create_item id: 1, title: 'A', score: 100
+
+    get '/'
+    body = last_response.body
+
+    assert_match(/e\.key === ' '/, body)
+    assert_includes body, 'a:focus-visible'
+  end
+
+  # --- keyboard shortcuts overlay -------------------------------------------
+
+  # Each page documents the keys its own script binds, so the listing's filter
+  # shortcut must not leak onto a story page that has no filters.
+  def test_listing_cheatsheet_lists_the_filter_shortcut
+    create_item id: 1, title: 'A', score: 100
+
+    get '/'
+    body = last_response.body
+
+    assert_includes body, 'Keyboard shortcuts'
+    assert_includes body, 'Activate the focused filter'
+    assert_includes body, 'Down or up a row, keeping the column'
+  end
+
+  def test_story_cheatsheet_documents_comment_navigation_only
+    create_item id: 1, title: 'A', score: 100
+
+    get '/stories/1'
+    body = last_response.body
+
+    assert_includes body, 'Down or up a comment'
+    refute_includes body, 'Activate the focused filter'
+  end
+
+  # A 404 renders through the same layout; without a shortcut list there is
+  # nothing to show, and the partial must not be rendered at all.
+  def test_pages_without_shortcuts_omit_the_cheatsheet
+    get '/nope'
+
+    assert_equal 404, last_response.status
+    refute_includes last_response.body, 'Keyboard shortcuts'
+  end
+
   # --- listing scope --------------------------------------------------------
 
   # The listing used to rely on comments never carrying a score key.
